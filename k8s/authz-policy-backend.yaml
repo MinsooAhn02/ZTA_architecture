@@ -1,0 +1,27 @@
+# ===========================
+# Backend AuthorizationPolicy: East-West 마이크로 세그멘테이션
+# backend 서비스에 대한 접근을 frontend-sa에서만 허용
+# → 횡적 이동(Lateral Movement) 방어
+# ===========================
+#
+# 방어 원리:
+#   1. PeerAuthentication(mTLS STRICT)이 사이드카 없는 Pod 차단 (1차 방어)
+#   2. 이 정책이 사이드카가 있더라도 frontend-sa만 backend 접근 허용 (2차 방어)
+#
+
+# backend: frontend-sa에서 오는 요청만 허용, 나머지 전부 차단
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: backend-allow-frontend-only
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/default/sa/frontend-sa"

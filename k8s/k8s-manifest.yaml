@@ -1,0 +1,106 @@
+# ===========================
+# 0. ServiceAccounts (마이크로 세그멘테이션용 신원 분리)
+# ===========================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend-sa
+  labels:
+    app: frontend
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+  labels:
+    app: backend
+---
+# ===========================
+# 1. Backend (데이터 저장소)
+# ===========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+      annotations:
+        sidecar.istio.io/inject: "true" # Istio 사이드카 강제 주입
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+        - name: backend
+          image: minsoo-app:v1 # 사용할 이미지 이름
+          imagePullPolicy: Never # 로컬 이미지를 사용 (다운로드 X)
+          env:
+            - name: ROLE
+              value: "backend"
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# ===========================
+# 2. Frontend (사용자 접속용)
+# ===========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+      annotations:
+        sidecar.istio.io/inject: "true" # Istio 사이드카 강제 주입
+    spec:
+      serviceAccountName: frontend-sa
+      containers:
+        - name: frontend
+          image: minsoo-app:v1
+          imagePullPolicy: Never
+          env:
+            - name: ROLE
+              value: "frontend"
+            - name: BACKEND_URL
+              value: "http://backend" # 백엔드 서비스 이름으로 호출
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: LoadBalancer # 외부 접속 허용
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 8080

@@ -1,0 +1,86 @@
+# 1. 법전(Policy)을 저장소에 등록
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-policy
+data:
+  policy.rego: |
+    package istio.authz
+
+    import input.attributes.request.http as http_request
+    import input.attributes.source as source_info
+
+    default allow = false
+
+    # Rule 1: North-South (외부→Frontend)
+    # role:admin 헤더가 있으면 Frontend 접근 허용
+    allow {
+        http_request.headers.role == "admin"
+    }
+
+    # Rule 2: East-West (Frontend→Backend)
+    # source principal이 frontend-sa이고 GET 메서드일 때 허용
+    allow {
+        source_info.principal == "cluster.local/ns/default/sa/frontend-sa"
+        http_request.method == "GET"
+    }
+---
+# 2. OPA 서버(판사) 배포
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opa
+  labels:
+    app: opa
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opa
+  template:
+    metadata:
+      labels:
+        app: opa
+      annotations:
+        sidecar.istio.io/inject: "false" # OPA는 메시 외부에 위치
+    spec:
+      containers:
+        - name: opa
+          image: openpolicyagent/opa:0.70.0-envoy
+          ports:
+            - containerPort: 8181
+            - containerPort: 9191
+          args:
+            - "run"
+            - "--server"
+            - "--addr=:8181"
+            - "--set=plugins.envoy_ext_authz_grpc.addr=:9191"
+            - "--set=plugins.envoy_ext_authz_grpc.path=istio/authz/allow"
+            - "--set=decision_logs.console=true"
+            - "/policies/policy.rego"
+          volumeMounts:
+            - readOnly: true
+              mountPath: /policies
+              name: opa-policy-vol
+      volumes:
+        - name: opa-policy-vol
+          configMap:
+            name: opa-policy
+---
+# 3. OPA 서비스 (통신 경로)
+apiVersion: v1
+kind: Service
+metadata:
+  name: opa
+  labels:
+    app: opa
+spec:
+  ports:
+    - name: grpc
+      port: 9191
+      targetPort: 9191
+    - name: http
+      port: 8181
+      targetPort: 8181
+  selector:
+    app: opa

@@ -1,0 +1,16 @@
+# Istio RequestAuthentication: Keycloak JWT 수용 설정
+# Keycloak에서 발급한 JWT의 서명을 검증하여 신뢰할 수 있는 토큰만 수용
+apiVersion: security.istio.io/v1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  jwtRules:
+    # ★ Keycloak Realm 설정 후 아래 값을 실제 환경에 맞게 수정해야 합니다
+    - issuer: "http://keycloak:8080/realms/myrealm"
+      jwksUri: "http://keycloak.default.svc.cluster.local:8080/realms/myrealm/protocol/openid-connect/certs"
+      forwardOriginalToken: true # 원본 JWT를 백엔드까지 전달

@@ -1,0 +1,13 @@
+# ===========================
+# PeerAuthentication: mTLS STRICT 모드 강제
+# 모든 서비스 간 통신에 상호 TLS 인증을 요구
+# → 사이드카가 없는 Pod(rogue)의 평문 접근 차단
+# ===========================
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default-strict-mtls
+  namespace: default
+spec:
+  mtls:
+    mode: STRICT
