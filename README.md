@@ -63,8 +63,13 @@ This project maps core ZTA components as defined by NIST 800-207:
 - Minikube installed in WSL
 
 ### 2. Full Setup
-One command to set up the entire environment (Phase 1 to 6):
+The `Makefile` is designed to be self-contained. If the Istio directory is missing, it will automatically download and configure it for you.
 ```bash
+# Clone the repository
+git clone https://github.com/MinsooAhn-SBU/ZTA_architecture.git
+cd ZTA_architecture
+
+# One command to set up the entire environment (Phase 1 to 6)
 make setup
 ```
 

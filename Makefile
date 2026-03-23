@@ -148,6 +148,10 @@ minikube-stop:
 
 istio-install:
 	@echo ">>> Checking Istio installation..."
+	@if [ ! -d "istio-1.28.3" ]; then \
+		echo "    Istio directory not found. Downloading Istio 1.28.3..."; \
+		curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -; \
+	fi
 	@if kubectl get deployment istiod -n istio-system >/dev/null 2>&1; then \
 		echo "    ✔ Istio is already installed (Skipping)"; \
 	else \
