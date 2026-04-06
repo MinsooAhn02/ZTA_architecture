@@ -1,0 +1,21 @@
+# JWT 인증 필수 정책
+# RequestAuthentication과 함께 사용하여 유효한 JWT가 없으면 403 반환
+# 잘못된 JWT 서명은 RequestAuthentication에서 401 반환
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: require-jwt
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  action: DENY
+  rules:
+    - from:
+        - source:
+            notRequestPrincipals: ["*"]  # JWT principal이 없으면 거부
+      to:
+        - operation:
+            ports: ["80"]
+            paths: ["/*"]

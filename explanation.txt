@@ -1,0 +1,262 @@
+================================================================================
+  ZTA Project - Test Suite Explanation
+  Based on NIST SP 800-207 Zero Trust Architecture
+================================================================================
+
+This document explains the ZTA project's test structure and security aspects
+that each test validates.
+
+
+================================================================================
+  TEST CATEGORIES OVERVIEW
+================================================================================
+
++-----------------------------------------------------------------------------+
+|  make test-all                                                              |
+|  +-- make test (North-South: External -> Internal Access Control)           |
+|  |   +-- test-block     : No token access -> 403 (Blocked)                  |
+|  |   +-- test-pass      : role:admin header -> 200 (Allowed)                |
+|  +-- make test-lateral (East-West: Internal Lateral Movement Defense)       |
+|  |   +-- test-lateral-block   : Rogue Pod -> Backend direct -> 403          |
+|  |   +-- test-lateral-sidecar : Wrong SA access -> 403                      |
+|  +-- make test-fake (JWT Forgery Defense)                                   |
+|  |   +-- test-fake      : Forged JWT -> 401                                 |
+|  +-- make test-jwt-auto (Valid JWT Authentication)                          |
+|      +-- test-jwt-auto  : Keycloak-issued token -> 200                      |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+  1. NORTH-SOUTH TESTS (External -> Internal Access Control)
+================================================================================
+
+Target: External access to Frontend service from outside the cluster
+Related Policy: k8s/authz-policy.yaml (OPA ext-authz integration)
+
++-----------------------------------------------------------------------------+
+|  Internet/External                                                          |
+|       |                                                                     |
+|       v                                                                     |
+|  +---------+     +---------+                                                |
+|  | Istio   |---->|   OPA   |  <- Authorization decision (role check)       |
+|  | Gateway |     +---------+                                                |
+|  +----+----+                                                                |
+|       | Allow/Deny                                                          |
+|       v                                                                     |
+|  +----------+                                                               |
+|  | Frontend |                                                               |
+|  +----------+                                                               |
++-----------------------------------------------------------------------------+
+
+[test-block] Access Without Token Test
+--------------------------------------
+Purpose: Verify that unauthenticated requests are blocked
+Command: make test-block
+Expected Result: HTTP 403 Forbidden
+Validation Points:
+  - OPA rejects requests without role header
+  - Zero Trust principle: "Never trust without explicit verification"
+
+[test-pass] Access With role:admin Header Test
+----------------------------------------------
+Purpose: Verify access is allowed with proper authorization
+Command: make test-pass
+Expected Result: HTTP 200 OK
+Validation Points:
+  - OPA verifies role=admin and allows access
+  - Confirms normal authorization flow
+
+
+================================================================================
+  2. EAST-WEST TESTS (Internal Lateral Movement Defense - Micro-segmentation)
+================================================================================
+
+Target: Pod-to-Pod communication control within the cluster
+Related Policies: 
+  - k8s/peer-auth.yaml (mTLS enforcement)
+  - k8s/authz-policy-backend.yaml (ServiceAccount-based access control)
+
++-----------------------------------------------------------------------------+
+|  Inside Cluster                                                             |
+|                                                                             |
+|  +----------+         mTLS + SA Validation      +----------+               |
+|  | Frontend |  <--------------------------->    | Backend  |               |
+|  | (envoy)  |    Only frontend-sa allowed       | (envoy)  |               |
+|  +----------+                                   +----------+               |
+|       ^                                              ^                      |
+|       |                                              |                      |
+|       | Allowed (same SA)                            | Denied (different SA)|
+|       |                                              |                      |
+|  +----------+                              +------------+                   |
+|  | Rogue    | ---------------------------> | Direct     |                   |
+|  | Pod      |     No mTLS = Denied         | Access     |                   |
+|  +----------+                              +------------+                   |
++-----------------------------------------------------------------------------+
+
+[test-lateral-block] Rogue Pod Direct Access Test
+-------------------------------------------------
+Purpose: Verify Pod without sidecar cannot access Backend directly
+Command: make test-lateral-block
+Expected Result: HTTP 403 or Connection refused
+Validation Points:
+  - PeerAuthentication: STRICT mTLS enforcement
+  - Pods without Sidecar(Envoy) cannot negotiate mTLS
+  - Blocks lateral movement even if attacker compromises a Pod
+
+[test-lateral-sidecar] Wrong ServiceAccount Test
+------------------------------------------------
+Purpose: Verify access denied with incorrect ServiceAccount
+Command: make test-lateral-sidecar
+Expected Result: HTTP 403 Forbidden
+Validation Points:
+  - AuthorizationPolicy only allows frontend-sa
+  - Access attempt with backend-sa is denied
+  - SPIFFE ID based workload authentication
+
+
+================================================================================
+  3. JWT AUTHENTICATION TESTS
+================================================================================
+
+Target: JWT token validation (Keycloak integration)
+Related Policy: k8s/jwt-auth.yaml (RequestAuthentication)
+
++-----------------------------------------------------------------------------+
+|                                                                             |
+|  +----------+                      +----------+                             |
+|  |  Client  | --- JWT Token -----> |  Istio   |                             |
+|  +----------+                      | Ingress  |                             |
+|                                    +----+-----+                             |
+|                                         |                                   |
+|                                         v                                   |
+|                                 +--------------+                            |
+|                                 | JWT Verify   |                            |
+|                                 | (JWKS fetch) |                            |
+|                                 +------+-------+                            |
+|                                        |                                    |
+|         +------------------------------+----------------------------+       |
+|         |                              |                            |       |
+|         v                              v                            v       |
+|  +-------------+              +-------------+             +------------+    |
+|  | Valid Token |              | Fake Token  |             | No Token   |    |
+|  |    -> 200   |              |    -> 401   |             |   -> 403   |    |
+|  +-------------+              +-------------+             +------------+    |
+|                                                                             |
++-----------------------------------------------------------------------------+
+
+[test-fake] Forged JWT Test
+---------------------------
+Purpose: Verify forged/manipulated JWT is rejected
+Command: make test-fake
+Expected Result: HTTP 401 Unauthorized
+Validation Points:
+  - RequestAuthentication validates signature via JWKS
+  - Manipulated signature -> Immediate rejection
+  - Defends against token theft + modification attacks
+
+[test-jwt-auto] Valid JWT Test (Auto Token Issuance)
+----------------------------------------------------
+Purpose: Verify access with valid Keycloak-issued JWT
+Command: make test-jwt-auto
+Prerequisite: kubectl port-forward svc/keycloak 8080:8080
+Expected Result: HTTP 200 OK
+Validation Points:
+  - Real-time token issuance from Keycloak
+  - Istio validates signature via JWKS successfully
+  - Confirms full authentication pipeline
+
+[test-jwt] Valid JWT Test (Manual Token)
+----------------------------------------
+Purpose: Test with manually provided token
+Command: TOKEN=<your-token> make test-jwt
+Expected Result: HTTP 200 OK
+Use Case: Testing specific tokens or expired tokens
+
+
+================================================================================
+  4. PERFORMANCE TESTS
+================================================================================
+
+Target: Response time measurement with ZTA policies applied
+Tool: Fortio (Istio official load testing tool)
+
+[test-perf-zta] ZTA-Enabled Performance Measurement
+----------------------------------------------------
+Purpose: Measure latency with OPA + mTLS + AuthZ enabled
+Command: make test-perf
+Metrics:
+  - Average response time (avg)
+  - p50, p75, p90, p99 latency
+  - Queries per second (QPS)
+
+[test-perf-baseline] Baseline Performance Measurement
+-----------------------------------------------------
+Purpose: Measure baseline latency without policies
+Command: make clean && make test-perf-baseline
+Note: Remove policies first (run make clean)
+
+
+================================================================================
+  5. POLICY FILES REFERENCE
+================================================================================
+
++-----------------------------------------------------------------------------+
+|  Filename                       | Role                                      |
++-----------------------------------------------------------------------------+
+|  k8s/authz-policy.yaml          | OPA ext-authz integration (North-South)   |
+|  k8s/peer-auth.yaml             | STRICT mTLS enforcement (East-West)       |
+|  k8s/authz-policy-backend.yaml  | Backend SA-based access control           |
+|  k8s/jwt-auth.yaml              | Keycloak JWT validation (RequestAuth)     |
+|  k8s/jwt-require-policy.yaml    | JWT requirement policy (optional)         |
+|  k8s/opa-k8s.yaml               | OPA deployment + Rego policies            |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+  6. TEST EXECUTION FLOW
+================================================================================
+
+Recommended Test Order:
+
+1. Check Environment
+   $ make status
+
+2. Keycloak port-forward (required for test-jwt-auto)
+   $ kubectl port-forward svc/keycloak 8080:8080 &
+
+3. Run All Tests
+   $ make test-all
+
+4. Individual Tests (if needed)
+   $ make test-block
+   $ make test-fake
+   $ make test-lateral
+
+5. Performance Tests (optional)
+   $ make test-perf
+
+
+================================================================================
+  7. TROUBLESHOOTING
+================================================================================
+
+[test-jwt-auto Fails]
+  - Check Keycloak port-forward
+  - Verify make setup-keycloak was run
+  - Check Realm/Client/User configuration
+
+[test-lateral Results Unexpected]
+  - Check if peer-auth.yaml is applied
+  - kubectl get peerauthentication
+
+[All Tests Timeout]
+  - Check Pod status: make status
+  - Verify Istio sidecar injection: kubectl describe pod <pod-name>
+
+[Check OPA Logs]
+  - make logs-opa
+
+
+================================================================================
+  END OF DOCUMENT
+================================================================================

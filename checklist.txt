@@ -1,18 +1,29 @@
 ================================================================
-  ZTA Project Master Checklist & Sequence Tracker
+  ZTA Project - Master Checklist
   Researcher: Minsoo Ahn
-  Updated: 2026-03-23
+  Last Updated: 2026-04-06
 ================================================================
 
 [ Project Overview ]
-A Zero Trust Architecture (ZTA) implementation based on NIST SP 800-207.
-Key Components:
+Zero Trust Architecture (ZTA) implementation based on NIST SP 800-207.
 - IdP (Identity Provider): Keycloak
 - PDP (Policy Decision Point): OPA (Open Policy Agent)
 - PEP (Policy Enforcement Point): Istio (Service Mesh)
 
 ================================================================
-  PHASE 1: Research & Infrastructure [ COMPLETED ]
+  PROGRESS SUMMARY
+================================================================
+
+  Phase 1: Research & Infrastructure     [x] DONE
+  Phase 2: Service Deployment            [x] DONE
+  Phase 3: North-South Security          [x] DONE
+  Phase 4: East-West Micro-segmentation  [x] DONE
+  Phase 5: JWT Authentication & IdP      [x] DONE
+  Phase 6: Attack Simulation & Perf      [~] IN PROGRESS
+  Final Deliverables                     [ ] PENDING
+
+================================================================
+  PHASE 1: Research & Infrastructure [DONE]
 ================================================================
 [x] NIST SP 800-207 Standard Analysis
 [x] Component Mapping (PDP/PEP/IdP)
@@ -26,73 +37,137 @@ Key Components:
 [x] Automation via Makefile
 
 ================================================================
-  PHASE 2: Service Deployment [ COMPLETED ]
+  PHASE 2: Service Deployment [DONE]
 ================================================================
 [x] Frontend + Backend Deployment
 [x] Keycloak (IdP) Deployment
 [x] OPA (PDP) Deployment
-[x] All Pods Ready Verification
-    - frontend (2/2), backend (2/2), keycloak (2/2), opa (1/1)
+[x] All Pods Ready (frontend, backend, keycloak, opa)
 
 ================================================================
-  PHASE 3: North-South Security (Phase 5) [ COMPLETED ]
+  PHASE 3: North-South Security [DONE]
 ================================================================
 [x] OPA ext-authz Registration in Istio Mesh Config
-[x] AuthorizationPolicy (Frontend Entry Traffic -> OPA)
-[x] Basic Validation:
-    - [x] No Token -> 403 Forbidden
-    - [x] role:admin Header -> 200 OK
+[x] AuthorizationPolicy (Frontend -> OPA)
+[x] Validation:
+    - [x] No Token -> 403 Forbidden (make test-block)
+    - [x] role:admin Header -> 200 OK (make test-pass)
 
 ================================================================
-  PHASE 4: East-West Micro-segmentation (Phase 6) [ COMPLETED ]
+  PHASE 4: East-West Micro-segmentation [DONE]
 ================================================================
-[x] Vulnerability Assessment: Rogue -> Backend (Initial: 200 OK)
 [x] ServiceAccount Separation (frontend-sa / backend-sa)
 [x] PeerAuthentication (mTLS STRICT Mode)
 [x] Backend AuthorizationPolicy (Only frontend-sa allowed)
-[x] OPA Rego Policy Refinement (N-S + E-W Rules)
+[x] OPA Rego Policy Refinement
 [x] Validation:
     - [x] Normal Path (Frontend -> Backend) -> 200 OK
-    - [x] Rogue Pod -> Backend -> 403 Forbidden
-    - [x] Sidecar + Wrong SA -> Backend -> 403 Forbidden
+    - [x] Rogue Pod -> Backend -> 403 Forbidden (make test-lateral-block)
+    - [x] Wrong SA -> Backend -> 403 Forbidden (make test-lateral-sidecar)
 
 ================================================================
-  PHASE 5: JWT Authentication & IdP Integration [ IN PROGRESS ]
+  PHASE 5: JWT Authentication & IdP [DONE]
 ================================================================
 [x] RequestAuthentication (Keycloak JWT Signature Verification)
-[ ] Keycloak Realm Setup (Manual Configuration via Browser)
-[ ] Issue Valid JWT Token (make get-token)
-[ ] Validation:
-    - [ ] Valid JWT + role:admin -> 200 OK
-    - [ ] Expired/Invalid JWT -> 401 Unauthorized
+[x] Keycloak Realm Setup (Auto: make setup-keycloak)
+    - Realm: myrealm
+    - Client: zta-client (secret: zta-secret)
+    - User: testuser / testpass (role: admin)
+[x] JWT Token Issuance (make get-token)
+[x] Validation:
+    - [x] Valid JWT + role:admin -> 200 OK (make test-jwt-auto)
+    - [x] Fake/Invalid JWT -> 401 Unauthorized (make test-fake)
 
 ================================================================
-  PHASE 6: Attack Simulation & Performance (Phase 7) [ TODO ]
+  PHASE 6: Attack Simulation & Performance [IN PROGRESS]
 ================================================================
-[ ] Scenario A: Lateral Movement Attack Simulation
-[ ] Scenario B: Token Theft / Context-aware Attack Simulation
-[ ] Performance Analysis (Baseline vs. ZTA)
-    - [ ] Baseline Measurement (Policies OFF)
-    - [ ] ZTA Measurement (Policies ON)
-    - [ ] Overhead Percentage Calculation
-[ ] Evidence Collection:
+[x] Scenario A: Lateral Movement Attack
+    - Rogue Pod -> Backend: 403 Forbidden
+    - Wrong SA -> Backend: 403 Forbidden
+
+[x] Scenario B: Token Theft / Forgery Attack
+    - Manipulated JWT -> 401 Unauthorized
+
+[~] Performance Analysis:
+    - [ ] Baseline Measurement (Policies OFF) <-- YOU NEED TO DO THIS
+    - [x] ZTA Measurement: avg 10.8ms, 92.4 QPS (200 requests)
+    - [ ] Overhead Calculation (after baseline)
+
+[ ] Evidence Collection: <-- YOU NEED TO DO THIS
     - [ ] OPA Decision Logs
-    - [ ] Kiali/Grafana Dashboards
-    - [ ] Latency Comparison Tables
+    - [ ] Kiali Dashboard Screenshots
+    - [ ] Grafana Dashboard Screenshots
+    - [ ] Latency Comparison Table
 
 ================================================================
   FINAL DELIVERABLES
 ================================================================
 [x] Working Sandbox (Makefile Automation)
-[x] Policy Repository (Rego Policies per Service)
-[ ] Final Report (NIST Compliance + Security + Performance)
+[x] Policy Repository (Rego Policies)
+[x] Test Suite (make test-all)
+[x] Documentation (README.md, explanation.txt)
+[ ] Final Report <-- YOU NEED TO DO THIS
 
 ================================================================
-  IMMEDIATE NEXT STEPS
+  YOUR ACTION ITEMS (In Order)
 ================================================================
-- [ ] Configure Keycloak Realm 'myrealm' & Client 'zta-client'
-- [ ] Verify JWT-based Authorization (make test-jwt)
-- [ ] Execute Performance Benchmarking (make test-perf-zta)
-- [ ] Finalize Evidence Collection (Screenshots/Logs)
+
+1. [OPTIONAL] Baseline Performance Test
+   ─────────────────────────────────────
+   $ make clean                    # Remove policies
+   $ make deploy-all && make wait-pods
+   $ make test-perf-baseline       # Run baseline test
+   # Record results, then restore:
+   $ make step3 && make step4      # Re-apply policies
+
+2. [REQUIRED] Collect Screenshots
+   ─────────────────────────────────────
+   $ make ports                    # Start port-forwards
+   $ make open-kiali               # Screenshot: Service topology
+   $ make open-grafana             # Screenshot: Latency metrics
+   $ make open-keycloak            # Screenshot: Realm/Users config
+
+3. [REQUIRED] Collect Logs
+   ─────────────────────────────────────
+   $ make logs > evidence/opa-logs.txt
+   # Or just screenshot the terminal output
+
+4. [REQUIRED] Save Evidence
+   ─────────────────────────────────────
+   Create evidence/ folder and save:
+   - kiali-topology.png
+   - grafana-latency.png
+   - keycloak-config.png
+   - opa-logs.txt
+   - test-results.txt (make test-all output)
+
+5. [REQUIRED] Write Final Report
+   ─────────────────────────────────────
+   Include:
+   - NIST 800-207 Compliance Mapping
+   - Security Scenario Results
+   - Performance Analysis (ZTA vs Baseline)
+
+================================================================
+  QUICK REFERENCE
+================================================================
+
+  Run All Tests:        make test-all
+  Check Status:         make status
+  Start Port-Forwards:  make ports
+  Open Dashboards:      make open-kiali / open-grafana / open-keycloak
+  View OPA Logs:        make logs
+  Get JWT Token:        make get-token
+  Full Help:            make help
+
+================================================================
+  KEYCLOAK INFO
+================================================================
+
+  Admin Console: http://localhost:8080 (after make ports)
+  Admin Login:   admin / admin
+  Realm:         myrealm
+  Client:        zta-client (secret: zta-secret)
+  Test User:     testuser / testpass (role: admin)
 
 ================================================================

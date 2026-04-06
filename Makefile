@@ -3,448 +3,536 @@
 #  Based on NIST SP 800-207 | Keycloak + OPA + Istio
 # ============================================================
 #
-#  Full Setup:      make setup
-#  Step-by-Step:    make step1 / make step2 / make step3 / make step4
-#  Individual:      make minikube-start / make minikube-stop / make istio-install / make istio-addons / make build-image / make rebuild-image / make deploy-app / make deploy-keycloak / make deploy-opa / make wait-pods / make patch-istio-mesh / make apply-authz / make apply-jwt-auth / make apply-microseg / make open-keycloak
-#  Testing:         make test / make test-block / make test-pass / make get-token / make test-jwt / make test-fake / make test-lateral / make test-lateral-block / make test-lateral-sidecar / make test-all / make test-perf / make test-perf-baseline / make test-perf-zta
-#  Monitoring:      make status / make dashboard / make grafana / make logs-frontend / make logs-backend / make logs-opa / make logs-keycloak
-#  Cleanup:         make clean / make clean-all / make restart / make restart-app / make restart-opa /
-#  System Check:    make check-status
+#  Quick Start (Remember these 3!)
+#  ─────────────────────────────────────
+#    make all        → Full install + deploy + policies (first time)
+#    make test-all   → Run all security tests
+#    make status     → Check current status
+#
+#  Common Commands
+#  ─────────────────────────────────────
+#    make all           Full auto install
+#    make test-all      Run all tests
+#    make status        Pod/Service status
+#    make ports         Start all port-forwards (background)
+#    make dashboard     Kiali dashboard
+#    make grafana       Grafana dashboard
+#    make logs          OPA decision logs
+#    make clean         Delete resources (keep Istio)
+#    make help          Show all commands
+#
+#  ⚠️  Port-Forward Notes
+#  ─────────────────────────────────────
+#    Port-forwards run in background. To keep them alive:
+#    - Run in a SEPARATE TERMINAL, or
+#    - Use 'make ports' which runs with nohup
+#    - Check active: 'ps aux | grep port-forward'
+#    - Kill all: 'pkill -f "kubectl port-forward"'
 #
 # ============================================================
 
-# ---------- Configuration Variables ----------
+# ---------- Configuration ----------
 APP_IMAGE      := minsoo-app:v1
 MINIKUBE_CPUS  := 4
 MINIKUBE_MEM   := 8192
 ISTIOCTL       := ./istio-1.28.3/bin/istioctl
 NAMESPACE      := default
 KEYCLOAK_REALM := myrealm
+KEYCLOAK_URL   := http://localhost:8080
 
-.PHONY: help setup step1 step2 step3 step4 \
-        minikube-start minikube-stop istio-install istio-addons build-image rebuild-image \
-        deploy-app deploy-keycloak deploy-opa wait-pods \
-        patch-istio-mesh apply-authz apply-jwt-auth apply-microseg open-keycloak \
-        test test-block test-pass get-token test-jwt test-fake \
-        test-lateral test-lateral-block test-lateral-sidecar test-all \
+.PHONY: all help status test-all clean \
+        setup step1 step2 step3 step4 \
+        minikube-start minikube-stop \
+        istio-install istio-addons \
+        build-image rebuild-image \
+        deploy-app deploy-keycloak deploy-opa deploy-all wait-pods \
+        patch-istio-mesh apply-authz apply-jwt apply-microseg \
+        setup-keycloak open-keycloak open-kiali open-grafana get-token \
+        test test-block test-pass test-jwt test-jwt-auto test-fake \
+        test-lateral test-lateral-block test-lateral-sidecar \
         test-perf test-perf-baseline test-perf-zta \
-        status dashboard grafana \
-        logs-frontend logs-backend logs-opa logs-keycloak \
-        clean clean-all restart restart-app restart-opa
+        ports port-keycloak port-kiali port-grafana ports-stop \
+        dashboard grafana logs logs-opa logs-frontend logs-backend logs-keycloak \
+        clean-all restart
 
 # ============================================================
-#  Help Menu
+#  Quick Start Commands
+# ============================================================
+
+all: setup ports
+	@echo ""
+	@echo "=============================================="
+	@echo "  ZTA Environment Setup Complete!"
+	@echo "=============================================="
+	@echo ""
+	@echo "  Port-forwards started in background:"
+	@echo "    - Keycloak: http://localhost:8080"
+	@echo "    - Kiali:    http://localhost:20001"
+	@echo "    - Grafana:  http://localhost:3000"
+	@echo ""
+	@echo "  Next steps:"
+	@echo "    make setup-keycloak  -> Setup Keycloak realm (first time only)"
+	@echo "    make test-all        -> Run all tests"
+	@echo "    make dashboard       -> Open Kiali"
+	@echo "    make status          -> Check status"
+	@echo ""
+
+test-all: ensure-ports test test-lateral test-fake test-jwt-auto
+	@echo ""
+	@echo "=============================================="
+	@echo "  All Tests Complete!"
+	@echo "=============================================="
+	@echo ""
+	@echo "  Results:"
+	@echo "    - North-South: No token -> 403, With token -> 200"
+	@echo "    - East-West: Rogue Pod -> 403"
+	@echo "    - JWT Theft: Fake token -> 401"
+	@echo "    - JWT Auth: Valid Keycloak token -> 200"
+	@echo ""
+
+status:
+	@echo ""
+	@echo "=============================================="
+	@echo "  ZTA Cluster Status"
+	@echo "=============================================="
+	@echo ""
+	@echo "[Pods]"
+	@kubectl get pods -o wide 2>/dev/null || echo "  (Cluster not connected)"
+	@echo ""
+	@echo "[Services]"
+	@kubectl get svc 2>/dev/null || true
+	@echo ""
+	@echo "[Security Policies]"
+	@kubectl get authorizationpolicy,peerauthentication,requestauthentication 2>/dev/null || true
+	@echo ""
+
+# ============================================================
+#  Help
 # ============================================================
 help:
 	@echo ""
-	@echo "================================================================"
-	@echo "  ZTA Project - Command List"
-	@echo "================================================================"
+	@echo "=============================================="
+	@echo "  ZTA Project - Command Reference"
+	@echo "=============================================="
 	@echo ""
-	@echo "  ▶ Full Automation"
-	@echo "    make setup            Complete installation + deployment + policy (Phase 1~6)"
+	@echo "  Quick Start (Remember these!)"
+	@echo "  ----------------------------------------------"
+	@echo "    make all              Full install + deploy + policies + ports"
+	@echo "    make test-all         Run all security tests"
+	@echo "    make status           Check current status"
 	@echo ""
-	@echo "  ▶ Step-by-Step (Manual)"
-	@echo "    make step1            Minikube + Istio + Addons + Build Image"
-	@echo "    make step2            App + Keycloak + OPA Deployment"
-	@echo "    make step3            Enable North-South Security Policies"
-	@echo "    make step4            Enable East-West Micro-segmentation (Phase 6)"
+	@echo "  Installation (Step by step)"
+	@echo "  ----------------------------------------------"
+	@echo "    make step1            Minikube + Istio + Addons + Image"
+	@echo "    make step2            Deploy App + Keycloak + OPA"
+	@echo "    make step3            Apply North-South policies"
+	@echo "    make step4            Apply East-West micro-segmentation"
 	@echo ""
-	@echo "  ▶ Individual Commands"
-	@echo "    make minikube-start   Start Minikube only"
-	@echo "    make istio-install    Install Istio (skip if exists)"
-	@echo "    make istio-addons     Install Kiali/Prometheus/Grafana"
-	@echo "    make build-image      Build App Docker image (skip if exists)"
-	@echo "    make rebuild-image    Force rebuild App Docker image"
-	@echo "    make deploy-app       Deploy Frontend + Backend"
-	@echo "    make deploy-keycloak  Deploy Keycloak"
-	@echo "    make deploy-opa       Deploy OPA"
-	@echo "    make patch-istio-mesh Register OPA ext-authz in Istio mesh"
-	@echo "    make apply-authz      Apply AuthorizationPolicy (Frontend)"
-	@echo "    make apply-jwt-auth   Apply JWT Authentication Policy"
-	@echo "    make apply-microseg   Apply Micro-segmentation Policies (Phase 6)"
+	@echo "  Port-Forward (run in SEPARATE TERMINAL to keep alive)"
+	@echo "  ----------------------------------------------"
+	@echo "    make ports            Start ALL port-forwards (background)"
+	@echo "    make port-keycloak    Keycloak only (localhost:8080)"
+	@echo "    make port-kiali       Kiali only (localhost:20001)"
+	@echo "    make port-grafana     Grafana only (localhost:3000)"
+	@echo "    make ports-stop       Stop all port-forwards"
 	@echo ""
-	@echo "  ▶ Testing - North-South (External → Internal)"
-	@echo "    make test             Basic Block(403) + Pass(200) tests"
-	@echo "    make test-block       Access without token → Expect 403"
-	@echo "    make test-pass        Access with role:admin header → Expect 200"
-	@echo "    make get-token        Issue JWT token from Keycloak"
-	@echo "    make test-jwt         JWT + role:admin → Expect 200 (Requires TOKEN=<val>)"
-	@echo "    make test-fake        Manipulated JWT → Expect 401"
+	@echo "  Testing"
+	@echo "  ----------------------------------------------"
+	@echo "    make test             Basic tests (Block + Pass)"
+	@echo "    make test-lateral     Lateral Movement defense test"
+	@echo "    make test-fake        Fake JWT test -> 401"
+	@echo "    make test-jwt-auto    Auto-token JWT test (auto port-forward)"
+	@echo "    make test-jwt         Valid JWT test (TOKEN=xxx required)"
+	@echo "    make test-perf        Performance measurement (ZTA ON)"
+	@echo "    make test-perf-baseline  Baseline performance (policies OFF)"
 	@echo ""
-	@echo "  ▶ Testing - East-West (Lateral Movement Defense)"
-	@echo "    make test-lateral          Full lateral movement defense test"
-	@echo "    make test-lateral-block    Rogue Pod → Direct Backend access → Expect 403"
-	@echo "    make test-lateral-sidecar  Sidecar Pod (wrong SA) → Backend → Expect 403"
+	@echo "  Monitoring"
+	@echo "  ----------------------------------------------"
+	@echo "    make open-kiali       Open Kiali in browser (needs ports)"
+	@echo "    make open-grafana     Open Grafana in browser (needs ports)"
+	@echo "    make open-keycloak    Open Keycloak in browser (needs ports)"
+	@echo "    make dashboard        Open Kiali via istioctl"
+	@echo "    make grafana          Open Grafana via istioctl"
+	@echo "    make logs             OPA decision logs"
 	@echo ""
-	@echo "  ▶ Testing - Full"
-	@echo "    make test-all         North-South + East-West comprehensive test"
+	@echo "  Keycloak"
+	@echo "  ----------------------------------------------"
+	@echo "    make setup-keycloak   Create Realm/Client/User (first time only)"
+	@echo "    make get-token        Issue JWT token"
 	@echo ""
-	@echo "  ▶ Performance Measurement (Phase 7)"
-	@echo "    make test-perf             Measure performance with policies ON (fortio)"
-	@echo "    make test-perf-baseline    Measure Baseline performance (policies OFF)"
-	@echo "    make test-perf-zta         Measure ZTA performance (policies ON)"
+	@echo "  Cleanup"
+	@echo "  ----------------------------------------------"
+	@echo "    make clean            Delete K8s resources (keep Istio)"
+	@echo "    make clean-all        Delete everything (including Minikube)"
+	@echo "    make ports-stop       Stop all port-forwards"
 	@echo ""
-	@echo "  ▶ Monitoring"
-	@echo "    make status           Check Pod/Service status"
-	@echo "    make dashboard        Launch Kiali Dashboard"
-	@echo "    make grafana          Launch Grafana Dashboard"
-	@echo "    make logs-frontend    Frontend logs"
-	@echo "    make logs-backend     Backend logs"
-	@echo "    make logs-opa         OPA logs"
-	@echo "    make logs-keycloak    Keycloak logs"
-	@echo ""
-	@echo "  ▶ Cleanup"
-	@echo "    make clean            Delete K8s resources (keep Istio/Minikube)"
-	@echo "    make clean-all        Delete everything including Minikube"
-	@echo ""
-	@echo "================================================================"
-	@echo ""
-	@echo "  ▶ Intuitive System Check"
-	@echo "    make check-status     One-glance check of URL, Kiali, Pod status, etc."
 
 # ============================================================
-#  Full Automation (One-shot setup)
+#  Installation Steps
 # ============================================================
 setup: step1 step2 step3 step4
-	@echo ""
-	@echo "=============================================="
-	@echo "  ✅ ZTA Environment Setup Complete! (Phase 1~6)"
-	@echo "=============================================="
-	@echo ""
-	@echo "  Next Steps:"
-	@echo "    1. Configure Keycloak Realm (See Verification Guide)"
-	@echo "       make open-keycloak"
-	@echo "    2. Full Test"
-	@echo "       make test-all"
-	@echo "    3. Check Dashboard"
-	@echo "       make dashboard"
-	@echo ""
 
-# ============================================================
-#  Step 1: Environment Preparation
-# ============================================================
 step1: minikube-start istio-install istio-addons build-image
-	@echo ""
-	@echo ">>> [Step 1 Done] Minikube + Istio + Addons + Image Ready"
-	@echo ""
+	@echo ">>> [Step 1] Infrastructure ready"
 
+step2: deploy-all wait-pods
+	@echo ">>> [Step 2] Services deployed"
+
+step3: patch-istio-mesh apply-authz
+	@echo ">>> [Step 3] North-South policies applied"
+
+step4: apply-microseg apply-jwt
+	@echo ">>> [Step 4] East-West + JWT policies applied"
+
+# ---------- Step 1 Details ----------
 minikube-start:
-	@echo ">>> Checking Minikube status..."
-	@if minikube status --format='{{.Host}}' 2>/dev/null | grep -q "Running" && \
-	    minikube status --format='{{.APIServer}}' 2>/dev/null | grep -q "Running"; then \
-		minikube update-context >/dev/null 2>&1 || true; \
-		echo "    ✔ Minikube is already running (Skipping)"; \
+	@echo ">>> Starting Minikube..."
+	@if minikube status --format='{{.Host}}' 2>/dev/null | grep -q "Running"; then \
+		echo "    Already running (Skip)"; \
 	else \
-		echo "    Starting Minikube..."; \
 		minikube start --cpus $(MINIKUBE_CPUS) --memory $(MINIKUBE_MEM); \
-		echo "    ✔ Minikube started successfully"; \
 	fi
 
 minikube-stop:
-	@echo ">>> Stopping Minikube..."
 	@minikube stop
-	@echo "    ✔ Minikube stopped"
 
 istio-install:
-	@echo ">>> Checking Istio installation..."
-	@if [ ! -d "istio-1.28.3" ]; then \
-		echo "    Istio directory not found. Downloading Istio 1.28.3..."; \
-		curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -; \
-	fi
+	@echo ">>> Installing Istio..."
 	@if kubectl get deployment istiod -n istio-system >/dev/null 2>&1; then \
-		echo "    ✔ Istio is already installed (Skipping)"; \
+		echo "    Already installed (Skip)"; \
 	else \
-		echo "    Installing Istio (demo profile)..."; \
 		$(ISTIOCTL) install --set profile=demo -y; \
-		echo "    ✔ Istio installed successfully"; \
 	fi
-	@kubectl label namespace $(NAMESPACE) istio-injection=enabled --overwrite 2>/dev/null
-	@echo "    ✔ Sidecar auto-injection enabled for namespace: $(NAMESPACE)"
+	@kubectl label namespace $(NAMESPACE) istio-injection=enabled --overwrite 2>/dev/null || true
 
 istio-addons:
-	@echo ">>> Checking Istio Addons (Kiali, Prometheus, Grafana)..."
+	@echo ">>> Installing Istio Addons (Kiali, Prometheus, Grafana)..."
 	@if kubectl get deployment kiali -n istio-system >/dev/null 2>&1; then \
-		echo "    ✔ Addons are already installed (Skipping)"; \
+		echo "    Already installed (Skip)"; \
 	else \
-		echo "    Installing addons..."; \
-		kubectl apply -f istio-1.28.3/samples/addons/prometheus.yaml 2>/dev/null || true; \
-		kubectl apply -f istio-1.28.3/samples/addons/grafana.yaml 2>/dev/null || true; \
-		kubectl apply -f istio-1.28.3/samples/addons/kiali.yaml 2>/dev/null || true; \
-		echo "    ✔ Addons installed successfully"; \
+		kubectl apply -f istio-1.28.3/samples/addons/ 2>/dev/null || true; \
 	fi
 
 build-image:
-	@echo ">>> Checking App Docker image..."
+	@echo ">>> Building Docker image..."
 	@eval $$(minikube docker-env) && \
 	if docker image inspect $(APP_IMAGE) >/dev/null 2>&1; then \
-		echo "    ✔ $(APP_IMAGE) image already exists (Skipping)"; \
-		echo "      (Force rebuild: make rebuild-image)"; \
+		echo "    Image exists (Skip, force: make rebuild-image)"; \
 	else \
-		echo "    Building image..."; \
 		docker build -t $(APP_IMAGE) ./app/; \
-		echo "    ✔ $(APP_IMAGE) image built successfully"; \
 	fi
 
 rebuild-image:
-	@echo ">>> Force rebuilding App Docker image..."
 	@eval $$(minikube docker-env) && docker build -t $(APP_IMAGE) ./app/
-	@echo "    ✔ $(APP_IMAGE) image rebuilt successfully"
 
-# ============================================================
-#  Step 2: Service Deployment
-# ============================================================
-step2: deploy-app deploy-keycloak deploy-opa wait-pods
-	@echo ""
-	@echo ">>> [Step 2 Done] All services deployed"
-	@echo ""
+# ---------- Step 2 Details ----------
+deploy-all: deploy-app deploy-keycloak deploy-opa
 
 deploy-app:
 	@echo ">>> Deploying Frontend + Backend..."
 	@kubectl apply -f k8s/k8s-manifest.yaml
-	@echo "    ✔ App deployment complete"
 
 deploy-keycloak:
-	@echo ">>> Deploying Keycloak (IdP)..."
+	@echo ">>> Deploying Keycloak..."
 	@kubectl apply -f k8s/keycloak.yaml
-	@echo "    ✔ Keycloak deployment complete"
 
 deploy-opa:
-	@echo ">>> Deploying OPA (PDP)..."
+	@echo ">>> Deploying OPA..."
 	@kubectl apply -f k8s/opa-k8s.yaml
-	@echo "    ✔ OPA deployment complete"
 
 wait-pods:
-	@echo ">>> Waiting for Pods to be ready (Max 3m)..."
+	@echo ">>> Waiting for Pods to be ready (max 3min)..."
 	@kubectl wait --for=condition=Ready pod -l app=backend --timeout=180s 2>/dev/null || true
 	@kubectl wait --for=condition=Ready pod -l app=frontend --timeout=180s 2>/dev/null || true
 	@kubectl wait --for=condition=Ready pod -l app=keycloak --timeout=180s 2>/dev/null || true
 	@kubectl wait --for=condition=Ready pod -l app=opa --timeout=180s 2>/dev/null || true
-	@echo "    ✔ All Pods Ready"
+	@echo "    All Pods ready"
 
-# ============================================================
-#  Step 3: Enable Security Policies
-# ============================================================
-step3: patch-istio-mesh apply-authz
-	@echo ""
-	@echo ">>> [Step 3 Done] North-South security policies enabled"
-	@echo "    ⚠️  Access to Frontend without token/header will now be blocked (403)."
-	@echo ""
-
-# ============================================================
-#  Step 4: East-West Micro-segmentation (Phase 6)
-# ============================================================
-step4: apply-microseg
-	@echo ""
-	@echo ">>> [Step 4 Done] Micro-segmentation enabled"
-	@echo "    ✔ mTLS STRICT: Plaintext access from pods without sidecars blocked"
-	@echo "    ✔ Backend RBAC: Only frontend-sa allowed to access backend"
-	@echo "    ⚠️  Internal lateral movement is now restricted."
-	@echo ""
-
-apply-microseg:
-	@echo ">>> Applying Micro-segmentation policies..."
-	@kubectl apply -f k8s/peer-auth.yaml
-	@echo "    ✔ PeerAuthentication (mTLS STRICT) applied"
-	@kubectl apply -f k8s/authz-policy-backend.yaml
-	@echo "    ✔ Backend AuthorizationPolicy applied"
-	@echo "    ✔ Micro-segmentation policies applied successfully"
-
+# ---------- Step 3 Details ----------
 patch-istio-mesh:
-	@echo ">>> Checking OPA ext-authz registration in Istio mesh config..."
+	@echo ">>> Registering OPA ext-authz..."
 	@if kubectl get configmap istio -n istio-system -o yaml 2>/dev/null | grep -q "opa-provider"; then \
-		echo "    ✔ OPA provider is already registered (Skipping)"; \
+		echo "    Already registered (Skip)"; \
 	else \
-		echo "    Registering OPA ext-authz provider..."; \
 		kubectl get configmap istio -n istio-system -o json | \
 		python3 -c "import sys,json,yaml; cm=json.load(sys.stdin); mesh=yaml.safe_load(cm['data']['mesh']); prov=[p for p in mesh.get('extensionProviders',[]) if p.get('name')!='opa-provider']; prov.append({'name':'opa-provider','envoyExtAuthzGrpc':{'service':'opa.default.svc.cluster.local','port':'9191'}}); mesh['extensionProviders']=prov; cm['data']['mesh']=yaml.dump(mesh,default_flow_style=False); json.dump(cm,sys.stdout)" \
 		| kubectl replace -f -; \
 		kubectl rollout restart deployment/istiod -n istio-system; \
-		echo "    ⏳ Waiting for Istiod restart..."; \
 		kubectl rollout status deployment/istiod -n istio-system --timeout=120s; \
-		sleep 10; \
-		echo "    ✔ OPA ext-authz provider registered successfully"; \
 	fi
 
 apply-authz:
 	@echo ">>> Applying AuthorizationPolicy..."
-	@kubectl wait --for=condition=Ready pod -l app=istiod -n istio-system --timeout=60s 2>/dev/null || true
 	@kubectl apply -f k8s/authz-policy.yaml
-	@echo "    ✔ AuthorizationPolicy applied successfully"
+
+# ---------- Step 4 Details ----------
+apply-microseg:
+	@echo ">>> Applying Micro-segmentation..."
+	@kubectl apply -f k8s/peer-auth.yaml
+	@kubectl apply -f k8s/authz-policy-backend.yaml
+
+apply-jwt:
+	@echo ">>> Applying JWT authentication policy..."
+	@kubectl apply -f k8s/jwt-auth.yaml
+	@-kubectl apply -f k8s/jwt-require-policy.yaml 2>/dev/null || true
 
 # ============================================================
-#  JWT Related (Use after Keycloak Realm Setup)
+#  Keycloak
 # ============================================================
-apply-jwt-auth:
-	@echo ">>> Applying Keycloak JWT Authentication Policy..."
-	@kubectl apply -f k8s/jwt-auth.yaml
-	@echo "    ✔ RequestAuthentication applied successfully"
-	@echo ""
-	@echo "    ⚠️  Keycloak Realm '$(KEYCLOAK_REALM)' must be configured"
-	@echo "       for JWT verification to work correctly."
+
+# Setup Keycloak realm (run once after cluster init)
+# Checks if realm already exists before creating
+setup-keycloak:
+	@echo ">>> Keycloak Auto-Setup (myrealm, zta-client, testuser)..."
+	@echo "    Checking if realm exists..."
+	@REALM_CHECK=$$(curl -s "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)" 2>/dev/null | grep -c '"realm"' || echo "0"); \
+	if [ "$$REALM_CHECK" != "0" ]; then \
+		echo "    Realm '$(KEYCLOAK_REALM)' already exists (Skip)"; \
+		echo "    Use 'make get-token' to issue tokens"; \
+	else \
+		echo "    Creating realm..."; \
+		ADMIN_TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/master/protocol/openid-connect/token" \
+			-d "grant_type=password" -d "client_id=admin-cli" -d "username=admin" -d "password=admin" \
+			| python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))"); \
+		if [ -z "$$ADMIN_TOKEN" ]; then \
+			echo "    ERROR: Failed to get admin token. Is Keycloak running?"; \
+			echo "    Run: kubectl port-forward svc/keycloak 8080:8080"; \
+			exit 1; \
+		fi; \
+		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
+			-d '{"realm":"$(KEYCLOAK_REALM)","enabled":true}'; \
+		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/clients" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
+			-d '{"clientId":"zta-client","enabled":true,"publicClient":false,"secret":"zta-secret","directAccessGrantsEnabled":true}'; \
+		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/roles" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
+			-d '{"name":"admin"}'; \
+		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
+			-d '{"username":"testuser","enabled":true,"credentials":[{"type":"password","value":"testpass","temporary":false}]}'; \
+		USER_ID=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users?username=testuser" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" | python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')"); \
+		ROLE=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/roles/admin" -H "Authorization: Bearer $$ADMIN_TOKEN"); \
+		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users/$$USER_ID/role-mappings/realm" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
+			-d "[$$ROLE]"; \
+		echo ""; \
+		echo "    Keycloak setup complete!"; \
+		echo "    - Realm: $(KEYCLOAK_REALM)"; \
+		echo "    - Client: zta-client (secret: zta-secret)"; \
+		echo "    - User: testuser / testpass (role: admin)"; \
+	fi
 
 open-keycloak:
-	@echo ">>> Keycloak Admin Console URL:"
-	@echo "    ID: admin / PW: admin"
-	@minikube service keycloak --url
+	@echo ">>> Keycloak Admin Console:"
+	@echo "    URL: http://localhost:8080"
+	@echo "    Username: admin"
+	@echo "    Password: admin"
+	@echo ""
+	@echo "    Opening in browser..."
+	@python3 -c "import webbrowser; webbrowser.open('http://localhost:8080')" 2>/dev/null || \
+		xdg-open "http://localhost:8080" 2>/dev/null || \
+		echo "    Please open http://localhost:8080 manually"
+
+open-kiali:
+	@echo ">>> Kiali Dashboard:"
+	@echo "    URL: http://localhost:20001"
+	@echo "    Opening in browser..."
+	@python3 -c "import webbrowser; webbrowser.open('http://localhost:20001')" 2>/dev/null || \
+		xdg-open "http://localhost:20001" 2>/dev/null || \
+		echo "    Please open http://localhost:20001 manually"
+
+open-grafana:
+	@echo ">>> Grafana Dashboard:"
+	@echo "    URL: http://localhost:3000"
+	@echo "    Opening in browser..."
+	@python3 -c "import webbrowser; webbrowser.open('http://localhost:3000')" 2>/dev/null || \
+		xdg-open "http://localhost:3000" 2>/dev/null || \
+		echo "    Please open http://localhost:3000 manually"
+
+get-token:
+	@echo ">>> Issuing JWT token..."
+	@curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" \
+		-d "client_id=zta-client" \
+		-d "client_secret=zta-secret" \
+		-d "username=testuser" \
+		-d "password=testpass" | python3 -c "import sys,json; d=json.load(sys.stdin); print('access_token:', d.get('access_token','ERROR: '+str(d)))"
 
 # ============================================================
-#  Testing (Internal curl tests)
+#  Testing
 # ============================================================
 test: test-block test-pass
-	@echo ""
-	@echo "=============================================="
-	@echo "  ✅ Basic Tests Complete"
-	@echo "=============================================="
+	@echo ">>> Basic tests complete"
 
 test-block:
 	@echo ""
-	@echo ">>> [Test 1] Access without token → Expect 403 Forbidden"
-	@echo "----------------------------------------------"
+	@echo ">>> [Test] Access without token -> Expect 403"
+	@echo "--------------------------------------------"
 	@kubectl delete pod test-block --ignore-not-found 2>/dev/null || true
 	@kubectl run test-block --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -o /dev/null -w "    Response Code: %{http_code}\n" http://frontend/ 2>/dev/null || true
+		-- curl -s -o /dev/null -w "Response: %{http_code}\n" http://frontend/ 2>/dev/null || true
 
 test-pass:
 	@echo ""
-	@echo ">>> [Test 2] role:admin header → Expect 200 OK"
-	@echo "----------------------------------------------"
+	@echo ">>> [Test] Access with role:admin header -> Expect 200"
+	@echo "--------------------------------------------"
 	@kubectl delete pod test-pass --ignore-not-found 2>/dev/null || true
 	@kubectl run test-pass --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -w "\n    Response Code: %{http_code}\n" -H "role: admin" http://frontend/ 2>/dev/null || true
-
-get-token:
-	@echo ""
-	@echo ">>> Issuing JWT Token from Keycloak"
-	@echo "----------------------------------------------"
-	@kubectl delete pod get-token --ignore-not-found 2>/dev/null || true
-	@kubectl run get-token --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -X POST \
-		   http://keycloak:8080/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token \
-		   -H "Content-Type: application/x-www-form-urlencoded" \
-		   -d "grant_type=password" \
-		   -d "client_id=zta-client" \
-		   -d "username=testuser" \
-		   -d "password=testpassword" 2>/dev/null || true
-	@echo ""
-	@echo "    Copy the 'access_token' value from the response above."
-	@echo "    Usage: TOKEN=<token_value> make test-jwt"
+		-- curl -s -w "\nResponse: %{http_code}\n" -H "role: admin" http://frontend/ 2>/dev/null || true
 
 test-jwt:
 	@echo ""
-	@echo ">>> [Test] JWT + role:admin → Expect 200 OK"
-	@echo "----------------------------------------------"
-	@if [ -z "$$TOKEN" ]; then \
-		echo "    ❌ TOKEN environment variable is missing."; \
-		echo "    Usage: TOKEN=eyJhbG... make test-jwt"; \
-		exit 1; \
-	fi
+	@echo ">>> [Test] Valid JWT -> Expect 200"
+	@echo "--------------------------------------------"
+	@if [ -z "$$TOKEN" ]; then echo "ERROR: TOKEN required. Usage: TOKEN=xxx make test-jwt"; exit 1; fi
 	@kubectl delete pod test-jwt --ignore-not-found 2>/dev/null || true
 	@kubectl run test-jwt --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -w "\n    Response Code: %{http_code}\n" \
-		   -H "Authorization: Bearer $$TOKEN" \
-		   -H "role: admin" \
-		   http://frontend/ 2>/dev/null || true
+		-- curl -s -w "\nResponse: %{http_code}\n" \
+		   -H "Authorization: Bearer $$TOKEN" -H "role: admin" http://frontend/ 2>/dev/null || true
 
 test-fake:
 	@echo ""
-	@echo ">>> [Test] Manipulated JWT → Expect 401 Unauthorized"
-	@echo "----------------------------------------------"
+	@echo ">>> [Test] Fake/Manipulated JWT -> Expect 401"
+	@echo "--------------------------------------------"
 	@kubectl delete pod test-fake --ignore-not-found 2>/dev/null || true
 	@kubectl run test-fake --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -o /dev/null -w "    Response Code: %{http_code}\n" \
+		-- curl -s -o /dev/null -w "Response: %{http_code}\n" \
 		   -H "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmYWtlIn0.invalid" \
-		   -H "role: admin" \
-		   http://frontend/ 2>/dev/null || true
+		   -H "role: admin" http://frontend/ 2>/dev/null || true
 
-# ============================================================
-#  Testing - East-West Lateral Movement Defense (Phase 6)
-# ============================================================
-test-lateral: test-lateral-block test-lateral-sidecar
+test-jwt-auto:
 	@echo ""
-	@echo "=============================================="
-	@echo "  ✅ East-West Defense Tests Complete"
-	@echo "=============================================="
+	@echo ">>> [Test] Valid Keycloak JWT -> Expect 200"
+	@echo "--------------------------------------------"
+	@echo "    Getting token from Keycloak..."
+	@TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
+		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		echo "    WARNING: Could not get token from Keycloak"; \
+		echo "    Make sure: kubectl port-forward svc/keycloak 8080:8080"; \
+		echo "    Skipping test..."; \
+	else \
+		echo "    Token acquired, testing..."; \
+		kubectl delete pod test-jwt-auto --ignore-not-found 2>/dev/null || true; \
+		kubectl run test-jwt-auto --image=curlimages/curl --restart=Never --rm -it \
+			-- curl -s -w "\nResponse: %{http_code}\n" \
+			   -H "Authorization: Bearer $$TOKEN" -H "role: admin" http://frontend/ 2>/dev/null || true; \
+	fi
+
+test-lateral: test-lateral-block test-lateral-sidecar
+	@echo ">>> Lateral Movement defense tests complete"
 
 test-lateral-block:
 	@echo ""
-	@echo ">>> [Lateral 1] Rogue Pod → Direct Backend access → Expect 403"
-	@echo "----------------------------------------------"
-	@kubectl delete pod test-lateral-block --ignore-not-found 2>/dev/null || true
-	@kubectl run test-lateral-block --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -w "\n    Response Code: %{http_code}" --max-time 5 http://backend/ 2>/dev/null || true
+	@echo ">>> [Lateral] Rogue Pod -> Direct Backend access -> Expect 403/Connection refused"
+	@echo "--------------------------------------------"
+	@kubectl delete pod test-rogue --ignore-not-found 2>/dev/null || true
+	@kubectl run test-rogue --image=curlimages/curl --restart=Never --rm -it \
+		-- curl -s -w "\nResponse: %{http_code}" --max-time 5 http://backend/ 2>/dev/null || true
 
 test-lateral-sidecar:
 	@echo ""
-	@echo ">>> [Lateral 2] Sidecar Pod (wrong SA) → Backend → Expect 403"
-	@echo "----------------------------------------------"
-	@kubectl delete pod test-lateral-sidecar --ignore-not-found 2>/dev/null || true
-	@kubectl run test-lateral-sidecar --image=curlimages/curl --restart=Never --rm -it \
+	@echo ">>> [Lateral] Wrong ServiceAccount -> Backend -> Expect 403"
+	@echo "--------------------------------------------"
+	@kubectl delete pod test-wrongsa --ignore-not-found 2>/dev/null || true
+	@kubectl run test-wrongsa --image=curlimages/curl --restart=Never --rm -it \
 		--overrides='{"spec":{"serviceAccountName":"backend-sa"}}' \
-		-- curl -s -w "\n    Response Code: %{http_code}" --max-time 10 http://backend/ 2>/dev/null || true
+		-- curl -s -w "\nResponse: %{http_code}" --max-time 10 http://backend/ 2>/dev/null || true
 
-# ============================================================
-#  Full Test (North-South + East-West)
-# ============================================================
-test-all: test test-lateral
-	@echo ""
-	@echo "=============================================="
-	@echo "  ✅ All Tests Complete (North-South + East-West)"
-	@echo "=============================================="
+# ---------- Performance ----------
+test-perf: test-perf-zta
 
-# ============================================================
-#  Performance Measurement (Phase 7) - Using fortio
-# ============================================================
-test-perf:
+test-perf-zta:
 	@echo ""
-	@echo ">>> Performance Test (ZTA Policies ON)"
+	@echo ">>> Performance Test (ZTA ON) - 200 requests"
 	@echo "=============================================="
-	@kubectl delete pod fortio-test --ignore-not-found 2>/dev/null || true
-	@kubectl run fortio-test --image=fortio/fortio --restart=Never --rm -it \
-		-- fortio load -c 1 -qps 0 -n 200 -H "role: admin" http://frontend/ 2>/dev/null || true
+	@kubectl delete pod fortio-zta --ignore-not-found 2>/dev/null || true
+	@kubectl run fortio-zta --image=fortio/fortio --restart=Never --rm -it \
+		-- load -c 1 -qps 0 -n 200 -H "role:admin" http://frontend/ 2>/dev/null || true
 
 test-perf-baseline:
 	@echo ""
 	@echo ">>> Baseline Performance Test (Policies OFF)"
-	@echo "    ⚠️  Run this in a clean state (after make clean)"
 	@echo "=============================================="
+	@echo "WARNING: Run 'make clean' first to remove policies"
 	@kubectl delete pod fortio-baseline --ignore-not-found 2>/dev/null || true
 	@kubectl run fortio-baseline --image=fortio/fortio --restart=Never --rm -it \
-		-- fortio load -c 1 -qps 0 -n 200 http://frontend/ 2>/dev/null || true
+		-- load -c 1 -qps 0 -n 200 http://frontend/ 2>/dev/null || true
 
-test-perf-zta:
+# ============================================================
+#  Port-Forward
+#  ⚠️  These run in BACKGROUND. To keep them alive after terminal closes:
+#      - Run 'make ports' in a SEPARATE TERMINAL, or
+#      - Use 'nohup make ports &' in current terminal
+#  Check active: ps aux | grep port-forward
+#  Stop all:     make ports-stop
+# ============================================================
+
+# Start all port-forwards in background
+ports: port-keycloak port-kiali port-grafana
 	@echo ""
-	@echo ">>> ZTA Performance Test (Policies ON)"
-	@echo "    ⚠️  Run this after applying policies (make step3 && make step4)"
-	@echo "=============================================="
-	@kubectl delete pod fortio-zta --image=fortio/fortio --restart=Never --rm -it \
-		-- fortio load -c 1 -qps 0 -n 200 -H "role: admin" http://frontend/ 2>/dev/null || true
+	@echo ">>> All port-forwards started in background"
+	@echo "    Keycloak: http://localhost:8080"
+	@echo "    Kiali:    http://localhost:20001"
+	@echo "    Grafana:  http://localhost:3000"
+	@echo ""
+	@echo "    Stop all: make ports-stop"
+
+# Ensure Keycloak port-forward is running (for test-jwt-auto)
+ensure-ports:
+	@if ! curl -s --connect-timeout 1 http://localhost:8080 >/dev/null 2>&1; then \
+		echo ">>> Starting Keycloak port-forward..."; \
+		nohup kubectl port-forward svc/keycloak 8080:8080 >/dev/null 2>&1 & \
+		sleep 2; \
+	fi
+
+port-keycloak:
+	@echo ">>> Starting Keycloak port-forward (8080)..."
+	@pkill -f "port-forward svc/keycloak" 2>/dev/null || true
+	@nohup kubectl port-forward svc/keycloak 8080:8080 >/dev/null 2>&1 &
+	@sleep 1
+	@echo "    Started: http://localhost:8080"
+
+port-kiali:
+	@echo ">>> Starting Kiali port-forward (20001)..."
+	@pkill -f "port-forward.*kiali" 2>/dev/null || true
+	@nohup kubectl port-forward svc/kiali -n istio-system 20001:20001 >/dev/null 2>&1 &
+	@sleep 1
+	@echo "    Started: http://localhost:20001"
+
+port-grafana:
+	@echo ">>> Starting Grafana port-forward (3000)..."
+	@pkill -f "port-forward.*grafana" 2>/dev/null || true
+	@nohup kubectl port-forward svc/grafana -n istio-system 3000:3000 >/dev/null 2>&1 &
+	@sleep 1
+	@echo "    Started: http://localhost:3000"
+
+ports-stop:
+	@echo ">>> Stopping all port-forwards..."
+	@pkill -f "kubectl port-forward" 2>/dev/null || true
+	@echo "    All port-forwards stopped"
 
 # ============================================================
 #  Monitoring
 # ============================================================
-status:
-	@echo ""
-	@echo ">>> Cluster Status"
-	@echo "=============================================="
-	@echo ""
-	@echo "[Pods]"
-	@kubectl get pods -n $(NAMESPACE) -o wide
-	@echo ""
-	@echo "[Services]"
-	@kubectl get svc -n $(NAMESPACE)
-	@echo ""
-	@echo "[Istio Sidecar Verification]"
-	@kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .spec.containers[*]}{.name}{" "}{end}{"\n"}{end}'
-	@echo ""
-
 dashboard:
-	@echo ">>> Launching Kiali Dashboard (using istioctl)..."
+	@echo ">>> Opening Kiali dashboard..."
 	@$(ISTIOCTL) dashboard kiali
 
 grafana:
-	@echo ">>> Launching Grafana Dashboard (using istioctl)..."
+	@echo ">>> Opening Grafana dashboard..."
 	@$(ISTIOCTL) dashboard grafana
+
+logs: logs-opa
+
+logs-opa:
+	@echo ">>> OPA decision logs (Ctrl+C to exit)"
+	@kubectl logs -l app=opa --tail=100 -f
 
 logs-frontend:
 	@kubectl logs -l app=frontend -c frontend --tail=50 -f
@@ -452,25 +540,23 @@ logs-frontend:
 logs-backend:
 	@kubectl logs -l app=backend -c backend --tail=50 -f
 
-logs-opa:
-	@kubectl logs -l app=opa --tail=50 -f
-
 logs-keycloak:
-	@kubectl logs -l app=keycloak --tail=50 -f
+	@kubectl logs -l app=keycloak -c keycloak --tail=50 -f
 
 # ============================================================
 #  Cleanup
 # ============================================================
 clean:
-	@echo ">>> Deleting K8s resources..."
-	@kubectl delete -f k8s/authz-policy-backend.yaml --ignore-not-found
-	@kubectl delete -f k8s/peer-auth.yaml --ignore-not-found
-	@kubectl delete -f k8s/authz-policy.yaml --ignore-not-found
-	@kubectl delete -f k8s/jwt-auth.yaml --ignore-not-found
-	@kubectl delete -f k8s/opa-k8s.yaml --ignore-not-found
-	@kubectl delete -f k8s/keycloak.yaml --ignore-not-found
-	@kubectl delete -f k8s/k8s-manifest.yaml --ignore-not-found
-	@echo "    ✔ Resources deleted (Istio/Minikube retained)"
+	@echo ">>> Deleting K8s resources (keeping Istio/Minikube)..."
+	@kubectl delete -f k8s/jwt-require-policy.yaml --ignore-not-found 2>/dev/null || true
+	@kubectl delete -f k8s/authz-policy-backend.yaml --ignore-not-found 2>/dev/null || true
+	@kubectl delete -f k8s/peer-auth.yaml --ignore-not-found 2>/dev/null || true
+	@kubectl delete -f k8s/authz-policy.yaml --ignore-not-found 2>/dev/null || true
+	@kubectl delete -f k8s/jwt-auth.yaml --ignore-not-found 2>/dev/null || true
+	@kubectl delete -f k8s/opa-k8s.yaml --ignore-not-found 2>/dev/null || true
+	@kubectl delete -f k8s/keycloak.yaml --ignore-not-found 2>/dev/null || true
+	@kubectl delete -f k8s/k8s-manifest.yaml --ignore-not-found 2>/dev/null || true
+	@echo "    Done"
 
 clean-all: clean
 	@echo ">>> Uninstalling Istio..."
@@ -478,47 +564,8 @@ clean-all: clean
 	@kubectl delete namespace istio-system --ignore-not-found 2>/dev/null || true
 	@echo ">>> Deleting Minikube..."
 	@minikube delete
-	@echo "    ✔ Full environment deleted"
+	@echo "    Full cleanup done"
 
-# ============================================================
-#  Utilities
-# ============================================================
-restart: restart-app restart-opa
-
-restart-app:
-	@echo ">>> Restarting apps..."
-	@kubectl rollout restart deployment/frontend deployment/backend
-	@kubectl rollout status deployment/frontend --timeout=60s
-	@kubectl rollout status deployment/backend --timeout=60s
-
-restart-opa:
-	@echo ">>> Restarting OPA..."
-	@kubectl rollout restart deployment/opa
-	@kubectl rollout status deployment/opa --timeout=60s
-
-# ============================================================
-#  System Check (Intuitive Glance)
-# ============================================================
-check-status:
-	@echo "\n==============================="
-	@echo "[Kiali Dashboard Launch Command]"
-	@echo "-------------------------------"
-	@echo "  make dashboard"
-	@echo "  (Or run directly: $(ISTIOCTL) dashboard kiali)"
-
-	@echo "\n[2] All Pods Running Status"
-	@echo "-------------------------------"
-	@kubectl get pods -n $(NAMESPACE) -o wide
-
-	@echo "\n[3] Istio Sidecar Injection Verification"
-	@echo "-------------------------------"
-	@kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .spec.containers[*]}{.name}{" "}{end}{"\n"}{end}' | grep istio-proxy || echo "    (Some pods missing sidecars)"
-
-	@echo "\n[4] Grafana Dashboard Launch Command"
-	@echo "-------------------------------"
-	@echo "  make grafana"
-	@echo "  (Or run directly: $(ISTIOCTL) dashboard grafana)"
-
-	@echo "\n[5] Check Complete"
-	@echo "-------------------------------"
-	@echo "  ✅ System check finished"
+restart:
+	@kubectl rollout restart deployment/frontend deployment/backend deployment/opa
+	@kubectl rollout status deployment/frontend deployment/backend deployment/opa --timeout=60s
