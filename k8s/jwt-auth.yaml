@@ -11,6 +11,7 @@ spec:
       app: frontend
   jwtRules:
     # ★ Keycloak Realm 설정 후 아래 값을 실제 환경에 맞게 수정해야 합니다
-    - issuer: "http://keycloak:8080/realms/myrealm"
+    # test-jwt-auto/get-token은 localhost:8080 경유로 토큰을 발급받으므로 iss와 일치시킵니다.
+    - issuer: "http://localhost:8080/realms/myrealm"
       jwksUri: "http://keycloak.default.svc.cluster.local:8080/realms/myrealm/protocol/openid-connect/certs"
       forwardOriginalToken: true # 원본 JWT를 백엔드까지 전달

@@ -142,6 +142,12 @@ What make setup does:
 5. Deploys app + Keycloak + OPA
 6. Applies authorization and micro-segmentation policies
 
+After `make setup`, if this is your first run, initialize Keycloak realm data:
+
+```bash
+make setup-keycloak
+```
+
 ### 4. Run Security Tests
 
 ```bash

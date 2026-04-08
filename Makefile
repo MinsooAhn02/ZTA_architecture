@@ -51,7 +51,7 @@ KEYCLOAK_URL   := http://localhost:8080
         test test-block test-pass test-jwt test-jwt-auto test-fake \
         test-lateral test-lateral-block test-lateral-sidecar \
         test-perf test-perf-baseline test-perf-zta \
-        ports port-keycloak port-kiali port-grafana ports-stop \
+	ports ensure-ports port-keycloak port-kiali port-grafana ports-stop \
         dashboard grafana logs logs-opa logs-frontend logs-backend logs-keycloak \
         clean-all restart
 
@@ -181,17 +181,24 @@ step2: deploy-all wait-pods
 step3: patch-istio-mesh apply-authz
 	@echo ">>> [Step 3] North-South policies applied"
 
-step4: apply-microseg apply-jwt
-	@echo ">>> [Step 4] East-West + JWT policies applied"
+step4: apply-microseg apply-jwt ensure-ports setup-keycloak
+	@echo ">>> [Step 4] East-West + JWT policies applied (Keycloak configured)"
 
 # ---------- Step 1 Details ----------
 minikube-start:
 	@echo ">>> Starting Minikube..."
 	@if minikube status --format='{{.Host}}' 2>/dev/null | grep -q "Running"; then \
-		echo "    Already running (Skip)"; \
+		if kubectl version --request-timeout=5s >/dev/null 2>&1; then \
+			echo "    Already running (Skip)"; \
+		else \
+			echo "    Minikube is running but Kubernetes API is unreachable. Restarting..."; \
+			minikube stop || true; \
+			minikube start --cpus $(MINIKUBE_CPUS) --memory $(MINIKUBE_MEM); \
+		fi; \
 	else \
 		minikube start --cpus $(MINIKUBE_CPUS) --memory $(MINIKUBE_MEM); \
 	fi
+	@minikube update-context
 
 minikube-stop:
 	@minikube stop
@@ -285,7 +292,7 @@ apply-jwt:
 setup-keycloak:
 	@echo ">>> Keycloak Auto-Setup (myrealm, zta-client, testuser)..."
 	@echo "    Checking if realm exists..."
-	@REALM_CHECK=$$(curl -s "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)" 2>/dev/null | grep -c '"realm"' || echo "0"); \
+	@REALM_CHECK=$$(curl -s "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)" 2>/dev/null | grep -o '"realm":"$(KEYCLOAK_REALM)"' | wc -l); \
 	if [ "$$REALM_CHECK" != "0" ]; then \
 		echo "    Realm '$(KEYCLOAK_REALM)' already exists (Skip)"; \
 		echo "    Use 'make get-token' to issue tokens"; \
@@ -493,28 +500,28 @@ ensure-ports:
 
 port-keycloak:
 	@echo ">>> Starting Keycloak port-forward (8080)..."
-	@pkill -f "port-forward svc/keycloak" 2>/dev/null || true
+	@pkill -f "[k]ubectl port-forward svc/keycloak" 2>/dev/null || true
 	@nohup kubectl port-forward svc/keycloak 8080:8080 >/dev/null 2>&1 &
 	@sleep 1
 	@echo "    Started: http://localhost:8080"
 
 port-kiali:
 	@echo ">>> Starting Kiali port-forward (20001)..."
-	@pkill -f "port-forward.*kiali" 2>/dev/null || true
+	@pkill -f "[k]ubectl port-forward.*kiali" 2>/dev/null || true
 	@nohup kubectl port-forward svc/kiali -n istio-system 20001:20001 >/dev/null 2>&1 &
 	@sleep 1
 	@echo "    Started: http://localhost:20001"
 
 port-grafana:
 	@echo ">>> Starting Grafana port-forward (3000)..."
-	@pkill -f "port-forward.*grafana" 2>/dev/null || true
+	@pkill -f "[k]ubectl port-forward.*grafana" 2>/dev/null || true
 	@nohup kubectl port-forward svc/grafana -n istio-system 3000:3000 >/dev/null 2>&1 &
 	@sleep 1
 	@echo "    Started: http://localhost:3000"
 
 ports-stop:
 	@echo ">>> Stopping all port-forwards..."
-	@pkill -f "kubectl port-forward" 2>/dev/null || true
+	@pkill -f "[k]ubectl port-forward" 2>/dev/null || true
 	@echo "    All port-forwards stopped"
 
 # ============================================================

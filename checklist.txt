@@ -88,10 +88,10 @@ Zero Trust Architecture (ZTA) implementation based on NIST SP 800-207.
 [x] Scenario B: Token Theft / Forgery Attack
     - Manipulated JWT -> 401 Unauthorized
 
-[~] Performance Analysis:
-    - [ ] Baseline Measurement (Policies OFF) <-- YOU NEED TO DO THIS
+[x] Performance Analysis:
+    - [x] Baseline Measurement: avg 5.95ms, 168.0 QPS (200 requests)
     - [x] ZTA Measurement: avg 10.8ms, 92.4 QPS (200 requests)
-    - [ ] Overhead Calculation (after baseline)
+    - [x] Overhead Calculation: +81.5% latency, -45.0% QPS
 
 [ ] Evidence Collection: <-- YOU NEED TO DO THIS
     - [ ] OPA Decision Logs
