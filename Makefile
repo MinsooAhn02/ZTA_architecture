@@ -3,10 +3,11 @@
 #  Based on NIST SP 800-207 | Keycloak + OPA + Istio
 # ============================================================
 #
-#  Quick Start (Remember these 3!)
+#  Quick Start
 #  ─────────────────────────────────────
 #    make all        → Full install + deploy + policies (first time)
 #    make test-all   → Run all security tests
+#	 make ports	     → Start all port-forwards (background)
 #    make status     → Check current status
 #
 #  Common Commands
