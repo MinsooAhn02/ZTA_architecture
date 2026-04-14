@@ -1,0 +1,12 @@
+=== Device Posture Simulation ===
+Scenario: stolen valid credential + unhealthy device posture
+
+[Attempt 1] Healthy device posture (X-Device-Firewall: enabled)
+HTTP: 200
+pod "attack-posture-ok" deleted from default namespace
+
+[Attempt 2] Unhealthy posture (X-Device-Firewall: disabled)
+HTTP: 403
+pod "attack-posture-block" deleted from default namespace
+
+[Result] enabled should be 200, disabled should be 403.

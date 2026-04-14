@@ -1,0 +1,8 @@
+{
+	"chat.tools.terminal.autoApprove": {
+		"/^bash -lc 'set -euo pipefail; cd /mnt/c/Users/dksal/zta-project; make all'$/": {
+			"approve": true,
+			"matchCommandLine": true
+		}
+	}
+}

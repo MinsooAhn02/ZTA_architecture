@@ -1,0 +1,74 @@
+================================================================================
+  WireGuard vs ZTA Comparison (WireGuard-first baseline)
+  Date: 2026-04-14
+================================================================================
+
+1) Scope and Method
+-------------------
+- This comparison is benchmark-based for WireGuard and measurement-based for this ZTA sandbox.
+- WireGuard values are cited from public technical references.
+- ZTA values come from local measured output in evidence/zta-vs-baseline-comparison.txt.
+- Direct localhost rerun for WireGuard was intentionally skipped because loopback/minikube
+  topology can understate tunnel overhead and overstate fairness.
+
+2) Security Capability Comparison
+---------------------------------
+
++------------------------------------------+-------------------------+-------------------------------+
+| Security capability                       | WireGuard VPN           | ZTA sandbox (this project)    |
++------------------------------------------+-------------------------+-------------------------------+
+| Transport encryption in transit           | Yes                     | Yes                           |
+| Mutual endpoint/workload authentication   | Yes (peer key)          | Yes (mTLS SPIFFE identity)    |
+| Per-request authentication                | No                      | Yes (JWT verification)        |
+| Role/method/path authorization            | No                      | Yes (OPA Rego policy)         |
+| East-west lateral movement control        | Limited                 | Yes (mTLS + authz policy)     |
+| Device posture gating                     | No                      | Yes (simulated in Scenario E) |
+| Decision logs/audit at request layer      | Limited                 | Yes (OPA decision logs)       |
++------------------------------------------+-------------------------+-------------------------------+
+
+Interpretation:
+- WireGuard is strong for secure tunneling and remote connectivity.
+- ZTA adds request-level identity/authorization and context-aware policy enforcement.
+
+3) Performance Comparison (Referenced + Measured)
+-------------------------------------------------
+
++----------------------+-------------------------------+--------------------------------+
+| Metric               | WireGuard (references)        | ZTA sandbox (measured)         |
++----------------------+-------------------------------+--------------------------------+
+| Added latency        | ~0.1 ms to 3 ms              | +4.85 ms                       |
+| Throughput impact    | ~2% to 5% decrease           | -45.0% QPS                     |
+| Main cost source     | Tunnel crypto                | mTLS + ext-authz + sidecar     |
+| Policy evaluation    | Not provided at L7           | OPA request-level decisions    |
++----------------------+-------------------------------+--------------------------------+
+
+ZTA measured source:
+- evidence/zta-vs-baseline-comparison.txt
+
+4) Practical Conclusion
+-----------------------
+- WireGuard-first is a good baseline for network-level protection.
+- ZTA has higher overhead but delivers broader controls (identity, authorization,
+  lateral-movement reduction, and policy observability).
+- For enterprise microservices, layered use is practical:
+  WireGuard for secure entry path + ZTA for service/request-level trust enforcement.
+
+5) References
+-------------
+[R1] Jason A. Donenfeld, "WireGuard: Next Generation Kernel Network Tunnel"
+     NDSS 2017, https://www.wireguard.com/papers/wireguard.pdf
+
+[R2] Cloudflare Blog, "Introducing WARP: Fixing Mobile Internet Performance and Security"
+     https://blog.cloudflare.com/1111-warp-better-vpn/
+
+[R3] Tailscale Blog, "WireGuard performance"
+     https://tailscale.com/blog/wireguard-performance
+
+[R4] Local project measurement output
+     evidence/zta-vs-baseline-comparison.txt
+
+6) Limitation Note
+------------------
+- This is not an apples-to-apples same-host direct benchmark.
+- The intent is model-level comparison (security coverage vs overhead),
+  not claiming universal latency superiority for either approach.

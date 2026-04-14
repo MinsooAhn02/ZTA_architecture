@@ -1,4 +1,13 @@
-# 1. 법전(Policy)을 저장소에 등록
+# ============================================================
+#  OPA Policy ConfigMap
+#  ZTA Policy Decision Point (PDP)
+#
+#  Defense layers this policy implements:
+#    - North-South: role header check (Scenario A/B)
+#    - Context-based: role + HTTP method + path (Scenario C)
+#    - JWT Claim-based: decode Bearer token, check realm roles (Scenario D)
+#    - East-West: source.principal (ServiceAccount) check
+# ============================================================
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -12,20 +21,119 @@ data:
 
     default allow = false
 
-    # Rule 1: North-South (외부→Frontend)
-    # role:admin 헤더가 있으면 Frontend 접근 허용
-    allow {
-        http_request.headers.role == "admin"
-    }
-
-    # Rule 2: East-West (Frontend→Backend)
-    # source principal이 frontend-sa이고 GET 메서드일 때 허용
+    # ──────────────────────────────────────────────────────────
+    # [East-West Internal Traffic Defense]
+    # Scenario A: Lateral Movement 방어
+    #
+    # frontend-sa ServiceAccount → backend: GET만 허용
+    # 원리: Istio가 mTLS SPIFFE ID(source.principal)를 검증
+    #       OPA는 이 검증된 신원에 기반해 인가 결정
+    #
+    # 왜 이것만으로는 부족한가?
+    #   → 이 규칙은 OPA ext-authz 경로를 통해야만 적용됨
+    #   → PeerAuthentication(STRICT mTLS) + AuthorizationPolicy(backend)가
+    #     1차/2차 방어선으로 이미 존재 (defense-in-depth)
+    # ──────────────────────────────────────────────────────────
     allow {
         source_info.principal == "cluster.local/ns/default/sa/frontend-sa"
         http_request.method == "GET"
+        not startswith(http_request.path, "/api/admin")
+    }
+
+    # ──────────────────────────────────────────────────────────
+    # [North-South: Simple Role Header]
+    # Scenario A/B 기본 검증용 (테스트 편의)
+    #
+    # role:admin 헤더 → 모든 경로/메서드 허용
+    # 실제 환경에서는 이 헤더를 클라이언트가 직접 조작 가능
+    # → JWT 기반 검증(Scenario D)이 더 안전함
+    # ──────────────────────────────────────────────────────────
+    allow {
+        http_request.headers.role == "admin"
+        device_posture_ok(http_request)
+    }
+
+    # ──────────────────────────────────────────────────────────
+    # [Scenario C: Context-Based Access Control]
+    # "context" = (신원 role) + (HTTP 메서드) + (요청 경로)
+    #
+    # role:user → GET만 허용, /api/admin 경로는 접근 불가
+    # 근거:
+    #   - 읽기(GET)는 낮은 위험, 쓰기(POST)는 높은 위험 → 분리
+    #   - /api/admin은 고감도 데이터 → role:admin만 허용
+    #   - NIST 800-207 §3.3: "access to resources is determined
+    #     by dynamic policy including attributes of the request"
+    # ──────────────────────────────────────────────────────────
+    allow {
+        http_request.headers.role == "user"
+        http_request.method == "GET"
+        not startswith(http_request.path, "/api/admin")
+    }
+
+    # ──────────────────────────────────────────────────────────
+    # [Scenario D: JWT Role Claim-Based Access Control]
+    # Istio가 JWT 서명 검증 → OPA가 클레임으로 인가 결정
+    #
+    # 왜 OPA에서 JWT를 디코딩하는가?
+    #   - Istio RequestAuthentication: 서명(authenticity) 검증
+    #   - OPA: 클레임 내용(authorization) 기반 세밀한 인가
+    #   - 역할 분리: "이 토큰이 진짜인가(인증)" vs "무엇을 할 수 있는가(인가)"
+    #   - io.jwt.decode()는 서명 재검증 없이 payload만 파싱
+    #     (이미 Istio가 검증했으므로 중복 불필요)
+    #
+    # JWT admin role → 모든 경로/메서드 허용
+    # (Scenario E) Device posture 헤더가 명시적으로 불량이면 차단
+    # ──────────────────────────────────────────────────────────
+    allow {
+        jwt_has_role(http_request, "admin")
+        device_posture_ok(http_request)
+    }
+
+    # JWT viewer role → GET만 허용, /api/admin 접근 불가
+    # 동일한 JWT 구조로 context-based 제어 시연
+    allow {
+        jwt_has_role(http_request, "viewer")
+        not jwt_has_role(http_request, "admin")
+        http_request.method == "GET"
+        not startswith(http_request.path, "/api/admin")
+    }
+
+    # ──────────────────────────────────────────────────────────
+    # [Scenario E: Device Posture Simulation]
+    # x-device-firewall:
+    #   - missing or enabled  -> 허용
+    #   - disabled            -> 차단
+    #
+    # 의도: 기존 시나리오(C/D)를 깨지 않으면서,
+    # "유효한 admin 자격증명 + 불량 posture"를 차단 시연
+    # ──────────────────────────────────────────────────────────
+    device_posture_ok(req) {
+        not req.headers["x-device-firewall"]
+    }
+
+    device_posture_ok(req) {
+        lower(req.headers["x-device-firewall"]) == "enabled"
+    }
+
+    # ──────────────────────────────────────────────────────────
+    # Helper: Bearer JWT에서 Keycloak realm_access.roles 확인
+    # io.jwt.decode([token]) → [header, payload, signature]
+    # payload.realm_access.roles = ["admin", "default-roles-myrealm", ...]
+    # ──────────────────────────────────────────────────────────
+    jwt_has_role(req, role) {
+        bearer := req.headers.authorization
+        startswith(bearer, "Bearer ")
+        token := trim_prefix(bearer, "Bearer ")
+        [_, payload, _] := io.jwt.decode(token)
+        role == payload.realm_access.roles[_]
     }
 ---
-# 2. OPA 서버(판사) 배포
+# ============================================================
+#  OPA Deployment
+#  - sidecar.istio.io/inject: "false" → OPA는 메시 외부(PDP)
+#  - decision_logs.console=true → OPA 로그로 모든 결정 추적 가능
+#  - envoy_ext_authz_grpc: Envoy와 gRPC로 통신
+# ============================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,7 +150,7 @@ spec:
       labels:
         app: opa
       annotations:
-        sidecar.istio.io/inject: "false" # OPA는 메시 외부에 위치
+        sidecar.istio.io/inject: "false"
     spec:
       containers:
         - name: opa
@@ -67,7 +175,6 @@ spec:
           configMap:
             name: opa-policy
 ---
-# 3. OPA 서비스 (통신 경로)
 apiVersion: v1
 kind: Service
 metadata:

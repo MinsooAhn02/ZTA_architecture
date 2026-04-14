@@ -1,173 +1,226 @@
 ================================================================
-  ZTA Project - Master Checklist
-  Researcher: Minsoo Ahn
-  Last Updated: 2026-04-06
+  ZTA Project - Execution Checklist (Todo-driven)
+  Owner: Minsoo Ahn
+  Last Updated: 2026-04-14
 ================================================================
 
-[ Project Overview ]
-Zero Trust Architecture (ZTA) implementation based on NIST SP 800-207.
-- IdP (Identity Provider): Keycloak
-- PDP (Policy Decision Point): OPA (Open Policy Agent)
-- PEP (Policy Enforcement Point): Istio (Service Mesh)
+Purpose
+  - Single source of truth for remaining work.
+  - Aligned with todo.txt "Owner Intent Freeze" and phase order.
+  - Written so another AI/engineer can continue without ambiguity.
+
+Execution Rules
+  1) Work top-to-bottom. Do not skip unchecked items unless blocked.
+  2) Mark [x] only after producing evidence file(s).
+  3) If blocked, mark [!] and add reason + next action.
+  4) Keep thesis narrative style: Before -> Setup -> Learning.
 
 ================================================================
-  PROGRESS SUMMARY
+  A. Frozen Decisions (Do Not Re-interpret)
 ================================================================
 
-  Phase 1: Research & Infrastructure     [x] DONE
-  Phase 2: Service Deployment            [x] DONE
-  Phase 3: North-South Security          [x] DONE
-  Phase 4: East-West Micro-segmentation  [x] DONE
-  Phase 5: JWT Authentication & IdP      [x] DONE
-  Phase 6: Attack Simulation & Perf      [~] IN PROGRESS
-  Final Deliverables                     [ ] PENDING
+[x] A1. Device posture method fixed to Approach A (header simulation)
+    - Required header: X-Device-Firewall (enabled/disabled)
+    - Optional headers: X-Device-Patch-Level, X-Device-OS-Version
+
+[x] A2. VPN baseline scope fixed
+    - 1st pass: WireGuard only
+    - OpenVPN: optional if extra time
+
+[x] A3. Priority fixed to P0 -> P1 -> P2
+    - P0: Device posture + JWT tampered test
+    - P1: Story demo + attack scripts
+    - P2: Log formatting + evidence structure
+
+[x] A4. Phase order fixed
+    - Phase 0 document analysis first
+    - Then implementation/document/evidence/final report
 
 ================================================================
-  PHASE 1: Research & Infrastructure [DONE]
-================================================================
-[x] NIST SP 800-207 Standard Analysis
-[x] Component Mapping (PDP/PEP/IdP)
-[x] ZTA Architecture Design
-[x] Minikube Cluster Setup (4 CPUs, 8GB RAM)
-[x] Flask App Development (Frontend/Backend)
-[x] Docker Image Building (minsoo-app:v1)
-[x] Istio Installation (Demo Profile)
-[x] Sidecar Auto-injection Setup (Namespace: default)
-[x] Istio Addons (Kiali, Prometheus, Grafana)
-[x] Automation via Makefile
-
-================================================================
-  PHASE 2: Service Deployment [DONE]
-================================================================
-[x] Frontend + Backend Deployment
-[x] Keycloak (IdP) Deployment
-[x] OPA (PDP) Deployment
-[x] All Pods Ready (frontend, backend, keycloak, opa)
-
-================================================================
-  PHASE 3: North-South Security [DONE]
-================================================================
-[x] OPA ext-authz Registration in Istio Mesh Config
-[x] AuthorizationPolicy (Frontend -> OPA)
-[x] Validation:
-    - [x] No Token -> 403 Forbidden (make test-block)
-    - [x] role:admin Header -> 200 OK (make test-pass)
-
-================================================================
-  PHASE 4: East-West Micro-segmentation [DONE]
-================================================================
-[x] ServiceAccount Separation (frontend-sa / backend-sa)
-[x] PeerAuthentication (mTLS STRICT Mode)
-[x] Backend AuthorizationPolicy (Only frontend-sa allowed)
-[x] OPA Rego Policy Refinement
-[x] Validation:
-    - [x] Normal Path (Frontend -> Backend) -> 200 OK
-    - [x] Rogue Pod -> Backend -> 403 Forbidden (make test-lateral-block)
-    - [x] Wrong SA -> Backend -> 403 Forbidden (make test-lateral-sidecar)
-
-================================================================
-  PHASE 5: JWT Authentication & IdP [DONE]
-================================================================
-[x] RequestAuthentication (Keycloak JWT Signature Verification)
-[x] Keycloak Realm Setup (Auto: make setup-keycloak)
-    - Realm: myrealm
-    - Client: zta-client (secret: zta-secret)
-    - User: testuser / testpass (role: admin)
-[x] JWT Token Issuance (make get-token)
-[x] Validation:
-    - [x] Valid JWT + role:admin -> 200 OK (make test-jwt-auto)
-    - [x] Fake/Invalid JWT -> 401 Unauthorized (make test-fake)
-
-================================================================
-  PHASE 6: Attack Simulation & Performance [IN PROGRESS]
-================================================================
-[x] Scenario A: Lateral Movement Attack
-    - Rogue Pod -> Backend: 403 Forbidden
-    - Wrong SA -> Backend: 403 Forbidden
-
-[x] Scenario B: Token Theft / Forgery Attack
-    - Manipulated JWT -> 401 Unauthorized
-
-[x] Performance Analysis:
-    - [x] Baseline Measurement: avg 5.95ms, 168.0 QPS (200 requests)
-    - [x] ZTA Measurement: avg 10.8ms, 92.4 QPS (200 requests)
-    - [x] Overhead Calculation: +81.5% latency, -45.0% QPS
-
-[ ] Evidence Collection: <-- YOU NEED TO DO THIS
-    - [ ] OPA Decision Logs
-    - [ ] Kiali Dashboard Screenshots
-    - [ ] Grafana Dashboard Screenshots
-    - [ ] Latency Comparison Table
-
-================================================================
-  FINAL DELIVERABLES
-================================================================
-[x] Working Sandbox (Makefile Automation)
-[x] Policy Repository (Rego Policies)
-[x] Test Suite (make test-all)
-[x] Documentation (README.md, explanation.txt)
-[ ] Final Report <-- YOU NEED TO DO THIS
-
-================================================================
-  YOUR ACTION ITEMS (In Order)
+  B. Verified Current State in Repository
 ================================================================
 
-1. [OPTIONAL] Baseline Performance Test
-   ─────────────────────────────────────
-   $ make clean                    # Remove policies
-   $ make deploy-all && make wait-pods
-   $ make test-perf-baseline       # Run baseline test
-   # Record results, then restore:
-   $ make step3 && make step4      # Re-apply policies
+[x] B1. Make targets for Scenario E and tampered JWT exist
+    - test-posture / test-posture-ok / test-posture-block
+    - test-jwt-tampered
+    - demo / demo-* targets
 
-2. [REQUIRED] Collect Screenshots
-   ─────────────────────────────────────
-   $ make ports                    # Start port-forwards
-   $ make open-kiali               # Screenshot: Service topology
-   $ make open-grafana             # Screenshot: Latency metrics
-   $ make open-keycloak            # Screenshot: Realm/Users config
+[x] B2. Attack scripts exist
+    - scripts/attack-lateral.sh
+    - scripts/attack-jwt-forge.sh
+    - scripts/attack-posture.sh
 
-3. [REQUIRED] Collect Logs
-   ─────────────────────────────────────
-   $ make logs > evidence/opa-logs.txt
-   # Or just screenshot the terminal output
+[x] B3. OPA posture and JWT-role logic exist
+    - k8s/opa-k8s.yaml includes device_posture_ok and jwt_has_role
 
-4. [REQUIRED] Save Evidence
-   ─────────────────────────────────────
-   Create evidence/ folder and save:
-   - kiali-topology.png
-   - grafana-latency.png
-   - keycloak-config.png
-   - opa-logs.txt
-   - test-results.txt (make test-all output)
+[x] B4. Dedicated pod-IP bypass test target in Makefile
+  - Added target: test-lateral-podip
+  - Included in test-lateral suite and help output
 
-5. [REQUIRED] Write Final Report
-   ─────────────────────────────────────
-   Include:
-   - NIST 800-207 Compliance Mapping
-   - Security Scenario Results
-   - Performance Analysis (ZTA vs Baseline)
+[x] B5. docs/threat-model.md file
+  - Created: docs/threat-model.md
+
+[x] B6. Evidence package files
+  - Captured: evidence/test-results.txt
+  - Captured: evidence/opa-decision-logs.txt
+  - Captured: evidence/attack-logs/*.txt
+  - Captured: evidence/screenshots/*.png
+  - Captured: evidence/vpn-zta-comparison.txt
 
 ================================================================
-  QUICK REFERENCE
+  C. Active Queue (Execute in Order)
 ================================================================
 
-  Run All Tests:        make test-all
-  Check Status:         make status
-  Start Port-Forwards:  make ports
-  Open Dashboards:      make open-kiali / open-grafana / open-keycloak
-  View OPA Logs:        make logs
-  Get JWT Token:        make get-token
-  Full Help:            make help
+------------------------------
+Phase 0 - Analysis First
+------------------------------
+
+[x] C0-1. Create docs/threat-model.md with assets + adversary model
+    Output:
+      - docs/threat-model.md
+    Acceptance:
+      - Assets A1~A5
+      - Adversaries T1~T5
+      - Explicit out-of-scope assumptions
+
+[x] C0-2. Add attack tree in docs/threat-model.md
+    Acceptance:
+      - Root goal: backend sensitive CRUD
+      - Branches mapped to Scenario A/B/C/D/E
+      - "What is blocked where" shown per branch
+
+[x] C0-3. Add defense layer mapping (4 layers)
+    Acceptance:
+      - Layer 1 mTLS identity
+      - Layer 2 SA/SPIFFE authorization
+      - Layer 3 JWT authenticity
+      - Layer 4 OPA context authorization
+
+[x] C0-4. Add bypass analysis per scenario
+    Acceptance:
+      - Each scenario includes likely bypass attempts
+      - Each attempt mapped to: blocked / out-of-scope / known limitation
+
+[x] C0-5. Add NIST 800-207 tenet mapping table
+    Acceptance:
+      - Tenet 1~7 mapped to concrete implementation and evidence
+
+[x] C0-6. Add thesis narrative block (Before -> Setup -> Learning)
+    Acceptance:
+      - Compact format for final report (2~3 pages target)
+
+------------------------------
+Phase 1 - Code/Policy Gaps
+------------------------------
+
+[x] C1-1. Add Makefile target for pod-IP bypass test
+    Output:
+      - Makefile (new target e.g., test-lateral-podip)
+    Acceptance:
+      - Rogue pod direct call to backend podIP:8080 is denied
+      - Included in test-lateral or test-all
+
+[x] C1-2. Validate Scenario E policy behavior on cluster
+    Acceptance:
+      - enabled -> 200, disabled -> 403
+      - Results captured in evidence/attack-logs/device-posture.txt
+
+------------------------------
+Phase 2 - Explanation Sync
+------------------------------
+
+[x] C2-1. Add "PDF proposal -> implementation" mapping table
+    Output:
+      - explanation.txt
+
+[x] C2-2. Add Device Posture section with limitation note
+    Acceptance:
+      - States header simulation limitation and real-world MDM/attestation path
+
+[x] C2-3. Add bypass-analysis summaries to each scenario section
+
+------------------------------
+Phase 3 - Evidence Collection
+------------------------------
+
+[x] C3-1. Capture full test run
+    Command:
+      - make test-all 2>&1 | tee evidence/test-results.txt
+
+[x] C3-2. Capture OPA decision logs
+    Command:
+      - make logs-pretty > evidence/opa-decision-logs.txt
+
+[x] C3-3. Collect attack run logs
+    Outputs:
+      - evidence/attack-logs/lateral-movement.txt
+      - evidence/attack-logs/jwt-forgery.txt
+      - evidence/attack-logs/device-posture.txt
+
+[x] C3-4. Collect screenshots
+    Outputs:
+      - evidence/screenshots/kiali-topology.png
+      - evidence/screenshots/grafana-latency.png
+      - evidence/screenshots/keycloak-users.png
+      - evidence/screenshots/keycloak-realm.png
+
+------------------------------
+Phase 4 - Final Deliverable
+------------------------------
+
+[x] C4-1. Final report draft (compact)
+    Includes:
+      - NIST mapping
+      - Scenario results table
+      - performance interpretation
+      - limits and future work
+    Output:
+      - docs/final-report-draft.md
+
+[x] C4-2. Demo rehearsal script sanity check
+    Command:
+      - make demo
+
+[x] C4-3. Final cleanup and commit prep
 
 ================================================================
-  KEYCLOAK INFO
+  D. Runbook (Copy/Paste Order)
 ================================================================
 
-  Admin Console: http://localhost:8080 (after make ports)
-  Admin Login:   admin / admin
-  Realm:         myrealm
-  Client:        zta-client (secret: zta-secret)
-  Test User:     testuser / testpass (role: admin)
+1) Document first (Phase 0)
+   - Write docs/threat-model.md
+
+2) Fill code gap (Phase 1)
+   - Add podIP test target
+
+3) Sync explanation (Phase 2)
+   - Update explanation sections
+
+4) Collect evidence (Phase 3)
+   - make test-all 2>&1 | tee evidence/test-results.txt
+   - make logs-pretty > evidence/opa-decision-logs.txt
+
+5) Final package (Phase 4)
+   - make demo
+   - finalize report
+
+================================================================
+  E. Execution Log
+================================================================
+
+- 2026-04-14: Checklist rebuilt from todo.txt and current repo state.
+- 2026-04-14: docs/threat-model.md created (assets, adversary model, attack tree, layer mapping, bypass analysis, NIST mapping, thesis narrative).
+- 2026-04-14: Makefile updated with explicit podIP bypass test target (test-lateral-podip).
+- 2026-04-14: C1-2 blocked in current session due unavailable kubectl cluster endpoint.
+- 2026-04-14: explanation.txt synced with Part 0 mapping, Scenario E section, and bypass summaries.
+- 2026-04-14: evidence structure prepared (attack-logs, screenshots, placeholder output files).
+- 2026-04-14: final report draft created at docs/final-report-draft.md.
+- 2026-04-14: WSL+Docker session restored; minikube context recovered and setup rerun.
+- 2026-04-14: C3-1/C3-2/C3-3 evidence captured with FINAL PASS in test-all.
+- 2026-04-14: C4-2 demo rehearsal completed (make demo PASS).
+- 2026-04-14: C3-4 screenshots captured (kiali, grafana, keycloak users/realm).
+- 2026-04-14: WireGuard-first benchmark comparison documented (evidence/vpn-zta-comparison.txt).
+- 2026-04-14: C4-3 cleanup/commit prep completed (working tree reviewed via git status).
+- Next action: optional user-approved final commit/tag
 
 ================================================================

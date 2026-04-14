@@ -18,8 +18,8 @@ This repository includes an automated Makefile workflow for:
 ## Research Objectives
 
 1. Build a ZTA environment with open-source components (Istio, OPA, Keycloak) on Kubernetes.
-2. Validate security scenarios (unauthorized north-south access and east-west lateral movement).
-3. Measure performance overhead introduced by ZTA controls.
+2. Validate five security scenarios covering north-south, east-west, JWT forgery, context-based access, and device posture.
+3. Measure performance overhead introduced by ZTA controls and compare security model against VPN (WireGuard).
 
 ## System Architecture
 
@@ -31,25 +31,32 @@ This repository includes an automated Makefile workflow for:
 
 ## Security Scenarios
 
-1. North-South Access Control
+| Scenario | Threat | Control | Verify |
+|---|---|---|---|
+| A: North-South | Unauthenticated external access | OPA role/JWT check | `make test-block`, `make test-pass` |
+| A: East-West | Compromised pod lateral movement | mTLS STRICT + SPIFFE allowlist | `make test-lateral` |
+| B: JWT Forgery | Forged / tampered JWT token | Istio JWKS signature verify | `make test-fake`, `make test-jwt-tampered` |
+| C: Context Access | Over-privileged request (wrong method/path) | OPA role+method+path policy | `make test-context` |
+| D: JWT Claim | Role escalation via JWT claim | OPA `io.jwt.decode` + Keycloak claim | `make test-jwt-role` |
+| E: Device Posture | Valid credential from unhealthy device | OPA `X-Device-Firewall` posture check | `make test-posture` |
 
-- Threat: external unauthorized access to internal services
-- Control: Keycloak JWT + OPA external authorization
-- Verify: make test-block (expected deny), make test-pass (expected allow)
+Run all scenarios at once:
 
-2. East-West Lateral Movement Prevention
-
-- Threat: compromised pod attempts internal movement
-- Control: Istio mTLS STRICT + service-account-based micro-segmentation
-- Verify: make test-lateral
+```bash
+make test-all
+```
 
 ## Project Structure
 
 - app/: Flask frontend/backend source
-- k8s/: Kubernetes manifests and security policies
-- istio-1.28.3/: Istio binary/manifests (can be auto-downloaded by Makefile)
-- Makefile: setup, deployment, test, monitoring, cleanup automation
+- k8s/: Kubernetes manifests and security policies (OPA Rego, Istio AuthzPolicy, JWT, mTLS)
+- scripts/: Attack simulation scripts (lateral movement, JWT forgery, device posture)
+- evidence/: Test results, OPA decision logs, performance comparison data
+- docs/: Threat model, defense layer analysis, unified deep-dive document
+- istio-1.28.3/: Istio binary/manifests (auto-downloaded by Makefile if missing)
+- Makefile: setup, deployment, test, demo, monitoring, cleanup automation
 - checklist.txt: project phase and verification tracker
+- explanation.txt: deep-dive architecture, scenario analysis, Q&A preparation
 
 ## Environment Setup (Windows 11 + WSL2)
 
@@ -142,10 +149,11 @@ What make setup does:
 5. Deploys app + Keycloak + OPA
 6. Applies authorization and micro-segmentation policies
 
-After `make setup`, if this is your first run, initialize Keycloak realm data:
+Keycloak realm and users are configured automatically during `make setup`.
+To add the viewer user needed for Scenario D (if not already done):
 
 ```bash
-make setup-keycloak
+make setup-keycloak-viewer
 ```
 
 ### 4. Run Security Tests
@@ -329,9 +337,12 @@ Re-run the install steps in this README and verify with version commands.
 
 ## NIST 800-207 Compliance Mapping
 
-| Principle                             | Implementation in this Sandbox       |
-| :------------------------------------ | :----------------------------------- |
-| All communication is secured          | Istio mTLS STRICT mode               |
-| Access is granted per session         | JWT issuance/validation via Keycloak |
-| Access is dynamically policy-based    | OPA Rego + Istio AuthorizationPolicy |
-| Asset state is continuously monitored | Kiali topology + Grafana metrics     |
+| Tenet | Principle | Implementation |
+|---|---|---|
+| 1 | All data sources are resources | Backend, Keycloak, OPA each treated as protected resources |
+| 2 | All communication secured regardless of location | Istio mTLS STRICT (Scenario A) |
+| 3 | Access granted per session | JWT per-request validation, stateless (Scenario B/D) |
+| 4 | Access determined by dynamic policy | OPA role + method + path + posture context (Scenario C/D/E) |
+| 5 | Asset integrity monitored continuously | Kiali topology, Grafana metrics, OPA decision logs |
+| 6 | All authentication and authorization dynamic | No pre-approved sessions; every request re-evaluated |
+| 7 | Collect as much information as possible | Prometheus/Grafana metrics, OPA `decision_logs.console=true` |

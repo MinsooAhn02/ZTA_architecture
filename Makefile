@@ -6,29 +6,27 @@
 #  Quick Start
 #  ─────────────────────────────────────
 #    make all        → Full install + deploy + policies (first time)
-#    make test-all   → Run all security tests
-#	 make ports	     → Start all port-forwards (background)
+#    make test-all   → Run all security tests (A, B, C, D, E)
+#    make demo       → Run storytelling demo flow (A~E)
+#    make ports      → Start all port-forwards (background)
 #    make status     → Check current status
 #
-#  Common Commands
+#  Test Scenarios
 #  ─────────────────────────────────────
-#    make all           Full auto install
-#    make test-all      Run all tests
-#    make status        Pod/Service status
-#    make ports         Start all port-forwards (background)
-#    make dashboard     Kiali dashboard
-#    make grafana       Grafana dashboard
-#    make logs          OPA decision logs
-#    make clean         Delete resources (keep Istio)
-#    make help          Show all commands
+#    make test           Scenario A/B: North-South (block/pass)
+#    make test-lateral   Scenario A: Lateral Movement defense
+#    make test-fake      Scenario B: JWT forgery → 403
+#    make test-jwt-tampered  Scenario B: Real JWT payload tamper → 401
+#    make test-jwt-auto  Scenario B: Valid JWT → 200
+#    make test-context   Scenario C: Context-based (role+method+path)
+#    make test-jwt-role  Scenario D: JWT role claim access control
+#    make test-posture   Scenario E: Device posture check
+#    make test-all       All scenarios A+B+C+D+E
 #
-#  ⚠️  Port-Forward Notes
+#  Monitoring Helpers
 #  ─────────────────────────────────────
-#    Port-forwards run in background. To keep them alive:
-#    - Run in a SEPARATE TERMINAL, or
-#    - Use 'make ports' which runs with nohup
-#    - Check active: 'ps aux | grep port-forward'
-#    - Kill all: 'pkill -f "kubectl port-forward"'
+#    make logs          Raw OPA decision logs
+#    make logs-pretty   Parsed OPA decision summary
 #
 # ============================================================
 
@@ -40,20 +38,29 @@ ISTIOCTL       := ./istio-1.28.3/bin/istioctl
 NAMESPACE      := default
 KEYCLOAK_REALM := myrealm
 KEYCLOAK_URL   := http://localhost:8080
+TEST_SUMMARY_FILE := .test-summary.log
 
 .PHONY: all help status test-all clean \
         setup step1 step2 step3 step4 \
         minikube-start minikube-stop \
         istio-install istio-addons \
         build-image rebuild-image \
+	prepare-summary print-summary \
         deploy-app deploy-keycloak deploy-opa deploy-all wait-pods \
         patch-istio-mesh apply-authz apply-jwt apply-microseg \
-        setup-keycloak open-keycloak open-kiali open-grafana get-token \
-        test test-block test-pass test-jwt test-jwt-auto test-fake \
-        test-lateral test-lateral-block test-lateral-sidecar \
+        setup-keycloak setup-keycloak-viewer open-keycloak open-kiali open-grafana \
+        get-token get-token-viewer \
+	test test-block test-pass test-jwt test-jwt-auto test-fake test-jwt-tampered \
+        test-lateral test-lateral-block test-lateral-sidecar test-lateral-podip \
+        test-context test-context-user-get test-context-user-admin \
+        test-context-user-post test-context-admin-post \
+        test-jwt-role test-jwt-admin-all test-jwt-viewer-read \
+        test-jwt-viewer-admin test-jwt-viewer-post \
+	test-posture test-posture-ok test-posture-block \
+	demo demo-lateral demo-jwt demo-context demo-jwt-role demo-posture demo-compare \
         test-perf test-perf-baseline test-perf-zta \
-	ports ensure-ports port-keycloak port-kiali port-grafana ports-stop \
-        dashboard grafana logs logs-opa logs-frontend logs-backend logs-keycloak \
+        ports ensure-ports port-keycloak port-kiali port-grafana ports-stop \
+	dashboard grafana logs logs-opa logs-frontend logs-backend logs-keycloak logs-pretty \
         clean-all restart
 
 # ============================================================
@@ -72,24 +79,35 @@ all: setup ports
 	@echo "    - Grafana:  http://localhost:3000"
 	@echo ""
 	@echo "  Next steps:"
-	@echo "    make setup-keycloak  -> Setup Keycloak realm (first time only)"
-	@echo "    make test-all        -> Run all tests"
-	@echo "    make dashboard       -> Open Kiali"
-	@echo "    make status          -> Check status"
+	@echo "    make setup-keycloak-viewer  -> Add viewer user (for Scenario D)"
+	@echo "    make test-all               -> Run all tests (Scenario A~E)"
+	@echo "    make status                 -> Check status"
 	@echo ""
 
-test-all: ensure-ports test test-lateral test-fake test-jwt-auto
+# All tests: Scenario A + B + C + D + E(device posture)
+test-all: ensure-ports prepare-summary
 	@echo ""
-	@echo "=============================================="
-	@echo "  All Tests Complete!"
-	@echo "=============================================="
-	@echo ""
-	@echo "  Results:"
-	@echo "    - North-South: No token -> 403, With token -> 200"
-	@echo "    - East-West: Rogue Pod -> 403"
-	@echo "    - JWT Theft: Fake token -> 401"
-	@echo "    - JWT Auth: Valid Keycloak token -> 200"
-	@echo ""
+	@echo "=============================================================="
+	@echo "RUNNING ALL TESTS (A~E)"
+	@echo "- Each test prints REQUEST / EXPECT / RESULT / STATUS"
+	@echo "- Final section prints consolidated summary table"
+	@echo "=============================================================="
+	@FAIL=0; \
+	for t in test test-lateral test-fake test-jwt-tampered test-jwt-auto test-context test-jwt-role test-posture; do \
+		echo ""; \
+		echo ">>> Running $$t"; \
+		if ! $(MAKE) --no-print-directory $$t; then \
+			FAIL=$$((FAIL+1)); \
+		fi; \
+	done; \
+	$(MAKE) --no-print-directory print-summary; \
+	echo ""; \
+	if [ $$FAIL -gt 0 ]; then \
+		echo "FINAL: FAIL ($$FAIL group/step failed)"; \
+		exit 1; \
+	else \
+		echo "FINAL: PASS (all groups matched expected result)"; \
+	fi
 
 status:
 	@echo ""
@@ -107,6 +125,27 @@ status:
 	@kubectl get authorizationpolicy,peerauthentication,requestauthentication 2>/dev/null || true
 	@echo ""
 
+prepare-summary:
+	@rm -f $(TEST_SUMMARY_FILE)
+	@touch $(TEST_SUMMARY_FILE)
+
+print-summary:
+	@echo ""
+	@echo "=============================================================="
+	@echo "FINAL SUMMARY (EXPECT vs RESULT)"
+	@echo "=============================================================="
+	@if [ ! -s $(TEST_SUMMARY_FILE) ]; then \
+		echo "No test records found in $(TEST_SUMMARY_FILE)"; \
+		exit 0; \
+	fi
+	@printf "%-36s | %-10s | %-10s | %-6s\n" "CASE" "EXPECT" "RESULT" "STATUS"
+	@echo "--------------------------------------------------------------------------"
+	@while IFS='|' read -r CASE EXPECT RESULT STATUS DETAIL; do \
+		printf "%-36s | %-10s | %-10s | %-6s\n" "$$CASE" "$$EXPECT" "$$RESULT" "$$STATUS"; \
+		echo "  detail: $$DETAIL"; \
+	done < $(TEST_SUMMARY_FILE)
+	@echo "--------------------------------------------------------------------------"
+
 # ============================================================
 #  Help
 # ============================================================
@@ -116,55 +155,89 @@ help:
 	@echo "  ZTA Project - Command Reference"
 	@echo "=============================================="
 	@echo ""
-	@echo "  Quick Start (Remember these!)"
-	@echo "  ----------------------------------------------"
+	@echo "  Quick Start"
+	@echo "  ─────────────────────────────────────"
 	@echo "    make all              Full install + deploy + policies + ports"
-	@echo "    make test-all         Run all security tests"
+	@echo "    make test-all         Run ALL tests (Scenario A ~ E)"
 	@echo "    make status           Check current status"
 	@echo ""
-	@echo "  Installation (Step by step)"
-	@echo "  ----------------------------------------------"
+	@echo "  Installation"
+	@echo "  ─────────────────────────────────────"
 	@echo "    make step1            Minikube + Istio + Addons + Image"
 	@echo "    make step2            Deploy App + Keycloak + OPA"
 	@echo "    make step3            Apply North-South policies"
 	@echo "    make step4            Apply East-West micro-segmentation"
 	@echo ""
-	@echo "  Port-Forward (run in SEPARATE TERMINAL to keep alive)"
-	@echo "  ----------------------------------------------"
-	@echo "    make ports            Start ALL port-forwards (background)"
-	@echo "    make port-keycloak    Keycloak only (localhost:8080)"
-	@echo "    make port-kiali       Kiali only (localhost:20001)"
-	@echo "    make port-grafana     Grafana only (localhost:3000)"
-	@echo "    make ports-stop       Stop all port-forwards"
+	@echo "  Scenario A: North-South + Lateral Movement"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make test-block           No token -> 403"
+	@echo "    make test-pass            role:admin header -> 200"
+	@echo "    make test-lateral-block   Rogue pod -> backend -> 403"
+	@echo "    make test-lateral-sidecar Wrong SA -> backend -> 403"
+	@echo "    make test-lateral-podip   Rogue pod -> backend podIP:8080 -> 403/000"
 	@echo ""
-	@echo "  Testing"
-	@echo "  ----------------------------------------------"
-	@echo "    make test             Basic tests (Block + Pass)"
-	@echo "    make test-lateral     Lateral Movement defense test"
-	@echo "    make test-fake        Fake JWT test -> 401"
-	@echo "    make test-jwt-auto    Auto-token JWT test (auto port-forward)"
-	@echo "    make test-jwt         Valid JWT test (TOKEN=xxx required)"
-	@echo "    make test-perf        Performance measurement (ZTA ON)"
-	@echo "    make test-perf-baseline  Baseline performance (policies OFF)"
+	@echo "  Scenario B: JWT Authentication"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make test-fake            Forged JWT -> 403"
+	@echo "    make test-jwt-tampered    Real JWT payload tampered -> 401"
+	@echo "    make test-jwt-auto        Valid Keycloak JWT -> 200"
+	@echo "    make test-jwt             Manual token: TOKEN=xxx make test-jwt"
 	@echo ""
-	@echo "  Monitoring"
-	@echo "  ----------------------------------------------"
-	@echo "    make open-kiali       Open Kiali in browser (needs ports)"
-	@echo "    make open-grafana     Open Grafana in browser (needs ports)"
-	@echo "    make open-keycloak    Open Keycloak in browser (needs ports)"
-	@echo "    make dashboard        Open Kiali via istioctl"
-	@echo "    make grafana          Open Grafana via istioctl"
-	@echo "    make logs             OPA decision logs"
+	@echo "  Scenario C: Context-Based Access Control [NEW]"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make test-context             Run all context tests"
+	@echo "    make test-context-user-get    role:user + GET /api/data -> 200"
+	@echo "    make test-context-user-admin  role:user + GET /api/admin -> 403"
+	@echo "    make test-context-user-post   role:user + POST /api/write -> 403"
+	@echo "    make test-context-admin-post  role:admin + POST /api/write -> 200"
+	@echo ""
+	@echo "  Scenario D: JWT Role Claim Access Control [NEW]"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make test-jwt-role            Run all JWT role tests"
+	@echo "    make test-jwt-admin-all       Admin JWT -> /api/admin -> 200"
+	@echo "    make test-jwt-viewer-read     Viewer JWT -> /api/data -> 200"
+	@echo "    make test-jwt-viewer-admin    Viewer JWT -> /api/admin -> 403"
+	@echo "    make test-jwt-viewer-post     Viewer JWT -> POST /api/write -> 403"
+	@echo ""
+	@echo "  Scenario E: Device Posture (PDF gap close)"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make test-posture          Run posture tests"
+	@echo "    make test-posture-ok       admin JWT + firewall=enabled -> 200"
+	@echo "    make test-posture-block    admin JWT + firewall=disabled -> 403"
+	@echo ""
+	@echo "  Demo (Storytelling)"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make demo                  Full scenario demo (A~E)"
+	@echo "    make demo-lateral          Lateral movement only"
+	@echo "    make demo-jwt              JWT fake+tampers+valid"
+	@echo "    make demo-context          Context-based only"
+	@echo "    make demo-jwt-role         JWT role-claim only"
+	@echo "    make demo-posture          Device posture only"
+	@echo "    make demo-compare          Print ZTA vs baseline evidence"
 	@echo ""
 	@echo "  Keycloak"
-	@echo "  ----------------------------------------------"
-	@echo "    make setup-keycloak   Create Realm/Client/User (first time only)"
-	@echo "    make get-token        Issue JWT token"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make setup-keycloak        Create Realm/Client/testuser (admin)"
+	@echo "    make setup-keycloak-viewer Add vieweruser (viewer role)"
+	@echo "    make get-token             JWT for testuser (admin)"
+	@echo "    make get-token-viewer      JWT for vieweruser (viewer)"
+	@echo ""
+	@echo "  Performance"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make test-perf            Performance with ZTA ON"
+	@echo "    make test-perf-baseline   Baseline (run make clean first)"
+	@echo ""
+	@echo "  Monitoring"
+	@echo "  ─────────────────────────────────────"
+	@echo "    make open-kiali       Kiali service graph"
+	@echo "    make open-grafana     Grafana latency dashboard"
+	@echo "    make open-keycloak    Keycloak admin console"
+	@echo "    make logs             OPA decision logs (live)"
 	@echo ""
 	@echo "  Cleanup"
-	@echo "  ----------------------------------------------"
+	@echo "  ─────────────────────────────────────"
 	@echo "    make clean            Delete K8s resources (keep Istio)"
-	@echo "    make clean-all        Delete everything (including Minikube)"
+	@echo "    make clean-all        Delete everything including Minikube"
 	@echo "    make ports-stop       Stop all port-forwards"
 	@echo ""
 
@@ -288,15 +361,12 @@ apply-jwt:
 #  Keycloak
 # ============================================================
 
-# Setup Keycloak realm (run once after cluster init)
-# Checks if realm already exists before creating
 setup-keycloak:
-	@echo ">>> Keycloak Auto-Setup (myrealm, zta-client, testuser)..."
-	@echo "    Checking if realm exists..."
+	@echo ">>> Keycloak Auto-Setup (myrealm, zta-client, testuser/admin)..."
 	@REALM_CHECK=$$(curl -s "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)" 2>/dev/null | grep -o '"realm":"$(KEYCLOAK_REALM)"' | wc -l); \
 	if [ "$$REALM_CHECK" != "0" ]; then \
 		echo "    Realm '$(KEYCLOAK_REALM)' already exists (Skip)"; \
-		echo "    Use 'make get-token' to issue tokens"; \
+		echo "    Run 'make setup-keycloak-viewer' to add viewer user for Scenario D"; \
 	else \
 		echo "    Creating realm..."; \
 		ADMIN_TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/master/protocol/openid-connect/token" \
@@ -326,41 +396,70 @@ setup-keycloak:
 			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
 			-d "[$$ROLE]"; \
 		echo ""; \
-		echo "    Keycloak setup complete!"; \
-		echo "    - Realm: $(KEYCLOAK_REALM)"; \
-		echo "    - Client: zta-client (secret: zta-secret)"; \
-		echo "    - User: testuser / testpass (role: admin)"; \
+		echo "    Setup complete: testuser / testpass (role: admin)"; \
+		echo "    Next: make setup-keycloak-viewer (for Scenario D)"; \
 	fi
 
+# Add viewer role + vieweruser for Scenario D JWT Role Claim tests
+setup-keycloak-viewer:
+	@echo ">>> Adding viewer role + vieweruser to Keycloak (Scenario D)..."
+	@ADMIN_TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/master/protocol/openid-connect/token" \
+		-d "grant_type=password" -d "client_id=admin-cli" -d "username=admin" -d "password=admin" \
+		| python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))"); \
+	if [ -z "$$ADMIN_TOKEN" ]; then \
+		echo "    ERROR: Keycloak not reachable. Run: make port-keycloak"; exit 1; \
+	fi; \
+	VIEWER_CHECK=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/roles/viewer" \
+		-H "Authorization: Bearer $$ADMIN_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('name',''))"); \
+	if [ "$$VIEWER_CHECK" = "viewer" ]; then \
+		echo "    viewer role already exists (Skip)"; \
+	else \
+		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/roles" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
+			-d '{"name":"viewer","description":"Read-only access, no admin paths, no write ops"}'; \
+		echo "    Created role: viewer"; \
+	fi; \
+	USER_CHECK=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users?username=vieweruser" \
+		-H "Authorization: Bearer $$ADMIN_TOKEN" | python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')"); \
+	if [ -n "$$USER_CHECK" ]; then \
+		echo "    vieweruser already exists (Skip)"; \
+	else \
+		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
+			-d '{"username":"vieweruser","enabled":true,"credentials":[{"type":"password","value":"viewerpass","temporary":false}]}'; \
+		VU_ID=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users?username=vieweruser" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" | python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')"); \
+		VROLE=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/roles/viewer" -H "Authorization: Bearer $$ADMIN_TOKEN"); \
+		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users/$$VU_ID/role-mappings/realm" \
+			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
+			-d "[$$VROLE]"; \
+		echo "    Created: vieweruser / viewerpass (role: viewer)"; \
+	fi; \
+	echo ""; \
+	echo "    Keycloak users:"; \
+	echo "      testuser  / testpass  (role: admin)  -> make get-token"; \
+	echo "      vieweruser / viewerpass (role: viewer) -> make get-token-viewer"
+
 open-keycloak:
-	@echo ">>> Keycloak Admin Console:"
-	@echo "    URL: http://localhost:8080"
-	@echo "    Username: admin"
-	@echo "    Password: admin"
-	@echo ""
-	@echo "    Opening in browser..."
+	@echo ">>> Keycloak Admin Console: http://localhost:8080"
 	@python3 -c "import webbrowser; webbrowser.open('http://localhost:8080')" 2>/dev/null || \
 		xdg-open "http://localhost:8080" 2>/dev/null || \
 		echo "    Please open http://localhost:8080 manually"
 
 open-kiali:
-	@echo ">>> Kiali Dashboard:"
-	@echo "    URL: http://localhost:20001"
-	@echo "    Opening in browser..."
+	@echo ">>> Kiali Dashboard: http://localhost:20001"
 	@python3 -c "import webbrowser; webbrowser.open('http://localhost:20001')" 2>/dev/null || \
 		xdg-open "http://localhost:20001" 2>/dev/null || \
 		echo "    Please open http://localhost:20001 manually"
 
 open-grafana:
-	@echo ">>> Grafana Dashboard:"
-	@echo "    URL: http://localhost:3000"
-	@echo "    Opening in browser..."
+	@echo ">>> Grafana Dashboard: http://localhost:3000"
 	@python3 -c "import webbrowser; webbrowser.open('http://localhost:3000')" 2>/dev/null || \
 		xdg-open "http://localhost:3000" 2>/dev/null || \
 		echo "    Please open http://localhost:3000 manually"
 
 get-token:
-	@echo ">>> Issuing JWT token..."
+	@echo ">>> Issuing JWT token for testuser (role: admin)..."
 	@curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
 		-H "Content-Type: application/x-www-form-urlencoded" \
 		-d "grant_type=password" \
@@ -369,90 +468,553 @@ get-token:
 		-d "username=testuser" \
 		-d "password=testpass" | python3 -c "import sys,json; d=json.load(sys.stdin); print('access_token:', d.get('access_token','ERROR: '+str(d)))"
 
+get-token-viewer:
+	@echo ">>> Issuing JWT token for vieweruser (role: viewer)..."
+	@curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" \
+		-d "client_id=zta-client" \
+		-d "client_secret=zta-secret" \
+		-d "username=vieweruser" \
+		-d "password=viewerpass" | python3 -c "import sys,json; d=json.load(sys.stdin); print('access_token:', d.get('access_token','ERROR: '+str(d)))"
+
 # ============================================================
-#  Testing
+#  Scenario A~E Tests (Detailed Signal Tracing)
+#  Output format: REQUEST SIGNALS -> EXPECT -> RESULT -> STATUS
 # ============================================================
-test: test-block test-pass
-	@echo ">>> Basic tests complete"
+test:
+	@echo ""
+	@echo "=============================================================="
+	@echo "SCENARIO A (North-South baseline checks)"
+	@echo "=============================================================="
+	@FAIL=0; \
+	for t in test-block test-pass; do \
+		if ! $(MAKE) --no-print-directory $$t; then FAIL=$$((FAIL+1)); fi; \
+	done; \
+	if [ $$FAIL -gt 0 ]; then echo "SCENARIO A (NS): FAIL ($$FAIL failed)"; exit 1; fi; \
+	echo "SCENARIO A (NS): PASS"
 
 test-block:
 	@echo ""
-	@echo ">>> [Test] Access without token -> Expect 403"
-	@echo "--------------------------------------------"
-	@kubectl delete pod test-block --ignore-not-found 2>/dev/null || true
-	@kubectl run test-block --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -o /dev/null -w "Response: %{http_code}\n" http://frontend/ 2>/dev/null || true
+	@echo "[A-NS-1] No identity -> Frontend must deny"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - method=GET path=/api/admin"
+	@echo "  - headers: (none)"
+	@echo "  - flow: client -> Istio PEP -> OPA PDP -> deny"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=403; \
+	RESULT=$$(kubectl delete pod test-block --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-block --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "A-NS-1 no-identity deny|$$EXPECTED|$$RESULT|$$STATUS|GET /api/admin without Authorization/role headers" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
 
 test-pass:
 	@echo ""
-	@echo ">>> [Test] Access with role:admin header -> Expect 200"
-	@echo "--------------------------------------------"
-	@kubectl delete pod test-pass --ignore-not-found 2>/dev/null || true
-	@kubectl run test-pass --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -w "\nResponse: %{http_code}\n" -H "role: admin" http://frontend/ 2>/dev/null || true
+	@echo "[A-NS-2] role:admin header -> Frontend allow (demo baseline)"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - method=GET path=/api/admin"
+	@echo "  - headers: role=admin"
+	@echo "  - flow: client -> Istio PEP -> OPA PDP(header rule) -> allow"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=200; \
+	RESULT=$$(kubectl delete pod test-pass --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-pass --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" -H "role: admin" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "A-NS-2 role-header allow|$$EXPECTED|$$RESULT|$$STATUS|GET /api/admin with role:admin header" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
 
 test-jwt:
 	@echo ""
-	@echo ">>> [Test] Valid JWT -> Expect 200"
-	@echo "--------------------------------------------"
+	@echo "[B-3] Manual valid JWT -> allow"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - method=GET path=/api/admin"
+	@echo "  - headers: Authorization=Bearer <TOKEN>"
+	@echo "  - flow: Istio RequestAuthentication(JWKS verify) -> OPA claim check -> allow"
 	@if [ -z "$$TOKEN" ]; then echo "ERROR: TOKEN required. Usage: TOKEN=xxx make test-jwt"; exit 1; fi
-	@kubectl delete pod test-jwt --ignore-not-found 2>/dev/null || true
-	@kubectl run test-jwt --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -w "\nResponse: %{http_code}\n" \
-		   -H "Authorization: Bearer $$TOKEN" -H "role: admin" http://frontend/ 2>/dev/null || true
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=200; \
+	RESULT=$$(kubectl delete pod test-jwt --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-jwt --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "B-3 manual valid jwt|$$EXPECTED|$$RESULT|$$STATUS|GET /api/admin with user-provided JWT" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
 
 test-fake:
 	@echo ""
-	@echo ">>> [Test] Fake/Manipulated JWT -> Expect 401"
-	@echo "--------------------------------------------"
-	@kubectl delete pod test-fake --ignore-not-found 2>/dev/null || true
-	@kubectl run test-fake --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -o /dev/null -w "Response: %{http_code}\n" \
-		   -H "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmYWtlIn0.invalid" \
-		   -H "role: admin" http://frontend/ 2>/dev/null || true
+	@echo "[B-1] Forged JWT signature -> must fail authentication"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - method=GET path=/api/admin"
+	@echo "  - forged token with invalid signature"
+	@echo "  - flow: invalid token -> no valid principal -> require-jwt deny (403)"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=403; \
+	RESULT=$$(kubectl delete pod test-fake --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-fake --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" \
+		   -H "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmYWtlIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9teXJlYWxtIn0.invalid" \
+		   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "B-1 forged jwt reject|$$EXPECTED|$$RESULT|$$STATUS|invalid signature token to /api/admin" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
 
-test-jwt-auto:
+test-jwt-tampered:
 	@echo ""
-	@echo ">>> [Test] Valid Keycloak JWT -> Expect 200"
-	@echo "--------------------------------------------"
-	@echo "    Getting token from Keycloak..."
-	@TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+	@echo "[B-2] Tampered real JWT payload -> must fail authentication"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - start from real token"
+	@echo "  - modify payload, keep original signature"
+	@echo "  - flow: Istio verifies signature against new payload -> mismatch -> 401"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=401; \
+	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
 		-H "Content-Type: application/x-www-form-urlencoded" \
 		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
 		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then \
-		echo "    WARNING: Could not get token from Keycloak"; \
-		echo "    Make sure: kubectl port-forward svc/keycloak 8080:8080"; \
-		echo "    Skipping test..."; \
+		RESULT="NO_TOKEN"; \
 	else \
-		echo "    Token acquired, testing..."; \
-		kubectl delete pod test-jwt-auto --ignore-not-found 2>/dev/null || true; \
-		kubectl run test-jwt-auto --image=curlimages/curl --restart=Never --rm -it \
-			-- curl -s -w "\nResponse: %{http_code}\n" \
-			   -H "Authorization: Bearer $$TOKEN" -H "role: admin" http://frontend/ 2>/dev/null || true; \
-	fi
+		HEADER=$$(echo "$$TOKEN" | cut -d. -f1); \
+		SIG=$$(echo "$$TOKEN" | cut -d. -f3); \
+		TAMPERED_PAYLOAD=$$(python3 -c "import base64,json; p={'sub':'tampered-user','realm_access':{'roles':['admin']}}; print(base64.urlsafe_b64encode(json.dumps(p,separators=(',',':')).encode()).decode().rstrip('='))"); \
+		TAMPERED="$$HEADER.$$TAMPERED_PAYLOAD.$$SIG"; \
+		RESULT=$$(kubectl delete pod test-jwt-tampered --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-jwt-tampered --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TAMPERED" \
+			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "B-2 tampered jwt reject|$$EXPECTED|$$RESULT|$$STATUS|real JWT payload modified then reused signature" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
 
-test-lateral: test-lateral-block test-lateral-sidecar
-	@echo ">>> Lateral Movement defense tests complete"
+test-jwt-auto:
+	@echo ""
+	@echo "[B-4] Valid Keycloak JWT -> allow"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - obtain token from Keycloak realm=$(KEYCLOAK_REALM)"
+	@echo "  - send Authorization: Bearer <valid token>"
+	@echo "  - flow: Istio authn pass -> OPA authz pass -> 200"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=200; \
+	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
+		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		RESULT="NO_TOKEN"; \
+	else \
+		RESULT=$$(kubectl delete pod test-jwt-auto --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-jwt-auto --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
+			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "B-4 valid jwt allow|$$EXPECTED|$$RESULT|$$STATUS|Keycloak issued token to /api/admin" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+test-lateral:
+	@echo ""
+	@echo "=============================================================="
+	@echo "SCENARIO A (East-West lateral movement)"
+	@echo "=============================================================="
+	@FAIL=0; \
+	for t in test-lateral-block test-lateral-sidecar test-lateral-podip; do \
+		if ! $(MAKE) --no-print-directory $$t; then FAIL=$$((FAIL+1)); fi; \
+	done; \
+	if [ $$FAIL -gt 0 ]; then echo "SCENARIO A (EW): FAIL ($$FAIL failed)"; exit 1; fi; \
+	echo "SCENARIO A (EW): PASS"
 
 test-lateral-block:
 	@echo ""
-	@echo ">>> [Lateral] Rogue Pod -> Direct Backend access -> Expect 403/Connection refused"
-	@echo "--------------------------------------------"
-	@kubectl delete pod test-rogue --ignore-not-found 2>/dev/null || true
-	@kubectl run test-rogue --image=curlimages/curl --restart=Never --rm -it \
-		-- curl -s -w "\nResponse: %{http_code}" --max-time 5 http://backend/ 2>/dev/null || true
+	@echo "[A-EW-1] Rogue pod (no sidecar) -> backend direct"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - source: pod without Istio sidecar/mTLS cert"
+	@echo "  - method=GET path=/ (backend service)"
+	@echo "  - flow: mTLS handshake expected to fail (or 403)"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED="403,000,503"; \
+	RESULT=$$(kubectl delete pod test-rogue --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-rogue --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://backend/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; \
+	if [ "$$RESULT" = "403" ] || [ "$$RESULT" = "000" ] || [ "$$RESULT" = "503" ]; then STATUS="PASS"; fi; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "A-EW-1 rogue no-sidecar block|$$EXPECTED|$$RESULT|$$STATUS|pod without sidecar to backend service" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
 
 test-lateral-sidecar:
 	@echo ""
-	@echo ">>> [Lateral] Wrong ServiceAccount -> Backend -> Expect 403"
-	@echo "--------------------------------------------"
-	@kubectl delete pod test-wrongsa --ignore-not-found 2>/dev/null || true
-	@kubectl run test-wrongsa --image=curlimages/curl --restart=Never --rm -it \
+	@echo "[A-EW-2] Wrong ServiceAccount(sidecar 있음) -> backend"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - source SA=backend-sa (expected frontend-sa only)"
+	@echo "  - method=GET path=/"
+	@echo "  - flow: mTLS pass -> AuthorizationPolicy(SPIFFE principal) deny"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=403; \
+	RESULT=$$(kubectl delete pod test-wrongsa --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-wrongsa --image=curlimages/curl --restart=Never --rm -i \
 		--overrides='{"spec":{"serviceAccountName":"backend-sa"}}' \
-		-- curl -s -w "\nResponse: %{http_code}" --max-time 10 http://backend/ 2>/dev/null || true
+		-- curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://backend/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "A-EW-2 wrong-sa deny|$$EXPECTED|$$RESULT|$$STATUS|backend-sa principal rejected by backend policy" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
 
-# ---------- Performance ----------
+test-lateral-podip:
+	@echo ""
+	@echo "[A-EW-3] Rogue pod (no sidecar) -> backend podIP:8080 direct"
+	@echo "REQUEST SIGNALS:"
+	@echo "  - source: pod without Istio sidecar"
+	@echo "  - target: backend pod IP:8080 (service name bypass attempt)"
+	@echo "  - flow: inbound Envoy/policy chain should still block"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED="403,000,503"; \
+	BACKEND_IP=$$(kubectl get pod -l app=backend -o jsonpath='{.items[0].status.podIP}' 2>/dev/null); \
+	if [ -z "$$BACKEND_IP" ]; then \
+		RESULT="NO_BACKEND_IP"; \
+	else \
+		RESULT=$$(kubectl delete pod test-rogue-podip --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-rogue-podip --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://$$BACKEND_IP:8080/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; \
+	if [ "$$RESULT" = "403" ] || [ "$$RESULT" = "000" ] || [ "$$RESULT" = "503" ]; then STATUS="PASS"; fi; \
+	echo "EXPECT: $$EXPECTED"; \
+	echo "RESULT: $$RESULT"; \
+	echo "STATUS: $$STATUS"; \
+	echo "A-EW-3 podip bypass deny|$$EXPECTED|$$RESULT|$$STATUS|rogue pod direct podIP call to backend:8080" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+# ============================================================
+#  Scenario C: Context-Based Access Control
+# ============================================================
+test-context:
+	@echo ""
+	@echo "=============================================================="
+	@echo "SCENARIO C (Context = role + method + path)"
+	@echo "=============================================================="
+	@FAIL=0; \
+	for t in test-context-user-get test-context-user-admin test-context-user-post test-context-admin-post; do \
+		if ! $(MAKE) --no-print-directory $$t; then FAIL=$$((FAIL+1)); fi; \
+	done; \
+	if [ $$FAIL -gt 0 ]; then echo "SCENARIO C: FAIL ($$FAIL failed)"; exit 1; fi; \
+	echo "SCENARIO C: PASS"
+
+test-context-user-get:
+	@echo ""
+	@echo "[C-1] role=user, GET /api/data"
+	@echo "REQUEST SIGNALS: allow expected (read + non-admin path)"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=200; \
+	RESULT=$$(kubectl delete pod test-ctx-1 --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-ctx-1 --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" -H "role: user" http://frontend/api/data 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "C-1 user get data allow|$$EXPECTED|$$RESULT|$$STATUS|role:user GET /api/data" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+test-context-user-admin:
+	@echo ""
+	@echo "[C-2] role=user, GET /api/admin"
+	@echo "REQUEST SIGNALS: deny expected (admin path restriction)"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=403; \
+	RESULT=$$(kubectl delete pod test-ctx-2 --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-ctx-2 --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" -H "role: user" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "C-2 user get admin deny|$$EXPECTED|$$RESULT|$$STATUS|role:user GET /api/admin" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+test-context-user-post:
+	@echo ""
+	@echo "[C-3] role=user, POST /api/write"
+	@echo "REQUEST SIGNALS: deny expected (write requires admin)"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=403; \
+	RESULT=$$(kubectl delete pod test-ctx-3 --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-ctx-3 --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "role: user" \
+		   -H "Content-Type: application/json" -d '{"data":"test"}' \
+		   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "C-3 user post write deny|$$EXPECTED|$$RESULT|$$STATUS|role:user POST /api/write" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+test-context-admin-post:
+	@echo ""
+	@echo "[C-4] role=admin, POST /api/write"
+	@echo "REQUEST SIGNALS: allow expected (admin write privilege)"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=200; \
+	RESULT=$$(kubectl delete pod test-ctx-4 --ignore-not-found >/dev/null 2>&1 || true; \
+		kubectl run test-ctx-4 --image=curlimages/curl --restart=Never --rm -i \
+		-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "role: admin" \
+		   -H "Content-Type: application/json" -d '{"data":"admin-write"}' \
+		   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "C-4 admin post write allow|$$EXPECTED|$$RESULT|$$STATUS|role:admin POST /api/write" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+# ============================================================
+#  Scenario D: JWT Role Claim Access Control
+# ============================================================
+test-jwt-role:
+	@echo ""
+	@echo "=============================================================="
+	@echo "SCENARIO D (JWT claim-based authorization)"
+	@echo "=============================================================="
+	@FAIL=0; \
+	for t in test-jwt-admin-all test-jwt-viewer-read test-jwt-viewer-admin test-jwt-viewer-post; do \
+		if ! $(MAKE) --no-print-directory $$t; then FAIL=$$((FAIL+1)); fi; \
+	done; \
+	if [ $$FAIL -gt 0 ]; then echo "SCENARIO D: FAIL ($$FAIL failed)"; exit 1; fi; \
+	echo "SCENARIO D: PASS"
+
+test-jwt-admin-all:
+	@echo ""
+	@echo "[D-1] admin JWT -> GET /api/admin"
+	@echo "REQUEST SIGNALS: Istio JWT verify pass + OPA claim(admin) allow"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=200; \
+	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
+		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
+		RESULT=$$(kubectl delete pod test-d1 --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-d1 --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
+			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "D-1 admin jwt admin path|$$EXPECTED|$$RESULT|$$STATUS|admin token GET /api/admin" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+test-jwt-viewer-read:
+	@echo ""
+	@echo "[D-2] viewer JWT -> GET /api/data"
+	@echo "REQUEST SIGNALS: Istio JWT verify pass + OPA viewer read allow"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=200; \
+	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
+		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
+		RESULT=$$(kubectl delete pod test-d2 --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-d2 --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
+			   http://frontend/api/data 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "D-2 viewer jwt read allow|$$EXPECTED|$$RESULT|$$STATUS|viewer token GET /api/data" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+test-jwt-viewer-admin:
+	@echo ""
+	@echo "[D-3] viewer JWT -> GET /api/admin"
+	@echo "REQUEST SIGNALS: Istio JWT verify pass + OPA viewer admin path deny"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=403; \
+	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
+		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
+		RESULT=$$(kubectl delete pod test-d3 --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-d3 --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
+			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "D-3 viewer jwt admin deny|$$EXPECTED|$$RESULT|$$STATUS|viewer token GET /api/admin" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+test-jwt-viewer-post:
+	@echo ""
+	@echo "[D-4] viewer JWT -> POST /api/write"
+	@echo "REQUEST SIGNALS: Istio JWT verify pass + OPA viewer write deny"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=403; \
+	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
+		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
+		RESULT=$$(kubectl delete pod test-d4 --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-d4 --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $$TOKEN" \
+			   -H "Content-Type: application/json" -d '{"data":"inject"}' \
+			   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "D-4 viewer jwt post deny|$$EXPECTED|$$RESULT|$$STATUS|viewer token POST /api/write" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+# ============================================================
+#  Scenario E: Device Posture / Extended Context
+# ============================================================
+test-posture:
+	@echo ""
+	@echo "=============================================================="
+	@echo "SCENARIO E (Device posture gate)"
+	@echo "=============================================================="
+	@FAIL=0; \
+	for t in test-posture-ok test-posture-block; do \
+		if ! $(MAKE) --no-print-directory $$t; then FAIL=$$((FAIL+1)); fi; \
+	done; \
+	if [ $$FAIL -gt 0 ]; then echo "SCENARIO E: FAIL ($$FAIL failed)"; exit 1; fi; \
+	echo "SCENARIO E: PASS"
+
+test-posture-ok:
+	@echo ""
+	@echo "[E-1] admin JWT + X-Device-Firewall=enabled"
+	@echo "REQUEST SIGNALS: valid identity + healthy posture => allow"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=200; \
+	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
+		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
+		RESULT=$$(kubectl delete pod test-posture-ok --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-posture-ok --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
+			   -H "X-Device-Firewall: enabled" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "E-1 posture enabled allow|$$EXPECTED|$$RESULT|$$STATUS|admin JWT + firewall enabled" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+test-posture-block:
+	@echo ""
+	@echo "[E-2] admin JWT + X-Device-Firewall=disabled"
+	@echo "REQUEST SIGNALS: valid identity + risky posture => deny"
+	@touch $(TEST_SUMMARY_FILE)
+	@EXPECTED=403; \
+	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
+		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
+		RESULT=$$(kubectl delete pod test-posture-block --ignore-not-found >/dev/null 2>&1 || true; \
+			kubectl run test-posture-block --image=curlimages/curl --restart=Never --rm -i \
+			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
+			   -H "X-Device-Firewall: disabled" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	fi; \
+	[ -z "$$RESULT" ] && RESULT="ERR"; \
+	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
+	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
+	echo "E-2 posture disabled deny|$$EXPECTED|$$RESULT|$$STATUS|admin JWT + firewall disabled" >> $(TEST_SUMMARY_FILE); \
+	[ "$$STATUS" = "PASS" ]
+
+# ============================================================
+#  Demo Targets (storytelling output)
+# ============================================================
+demo: demo-lateral demo-jwt demo-context demo-jwt-role demo-posture
+	@echo ""
+	@echo "=============================================="
+	@echo "  Story Demo Complete (Scenario A ~ E)"
+	@echo "=============================================="
+
+demo-lateral: ensure-ports
+	@echo ""
+	@echo "=== SCENARIO 1: Lateral Movement Attack ==="
+	@echo "[상황] 내부 침투 후 backend 직접 접근 시도"
+	@$(MAKE) test-lateral
+
+demo-jwt: ensure-ports
+	@echo ""
+	@echo "=== SCENARIO 2: Token Forgery / Tampering ==="
+	@echo "[상황] 토큰 없이 접근, 가짜 토큰, 변조 토큰, 정상 토큰 비교"
+	@$(MAKE) test-block
+	@$(MAKE) test-fake
+	@$(MAKE) test-jwt-tampered
+	@$(MAKE) test-jwt-auto
+
+demo-context: ensure-ports
+	@echo ""
+	@echo "=== SCENARIO 3: Context-Based Access Control ==="
+	@echo "[상황] 같은 사용자라도 method/path 컨텍스트에 따라 결과가 달라짐"
+	@$(MAKE) test-context
+
+demo-jwt-role: ensure-ports
+	@echo ""
+	@echo "=== SCENARIO 4: JWT Claim-Based Access ==="
+	@echo "[상황] 헤더가 아닌 Keycloak 서명 JWT claim 기반 인가"
+	@$(MAKE) test-jwt-role
+
+demo-posture: ensure-ports
+	@echo ""
+	@echo "=== SCENARIO 5: Device Posture ==="
+	@echo "[상황] 유효한 admin 자격증명 + 불량 디바이스 상태는 차단"
+	@$(MAKE) test-posture
+
+demo-compare:
+	@echo ""
+	@echo "=== ZTA vs Baseline Comparison ==="
+	@if [ -f evidence/zta-vs-baseline-comparison.txt ]; then \
+		cat evidence/zta-vs-baseline-comparison.txt; \
+	else \
+		echo "evidence/zta-vs-baseline-comparison.txt 파일이 없습니다."; \
+	fi
+
+# ============================================================
+#  Performance Tests
+# ============================================================
 test-perf: test-perf-zta
 
 test-perf-zta:
@@ -474,24 +1036,14 @@ test-perf-baseline:
 
 # ============================================================
 #  Port-Forward
-#  ⚠️  These run in BACKGROUND. To keep them alive after terminal closes:
-#      - Run 'make ports' in a SEPARATE TERMINAL, or
-#      - Use 'nohup make ports &' in current terminal
-#  Check active: ps aux | grep port-forward
-#  Stop all:     make ports-stop
 # ============================================================
-
-# Start all port-forwards in background
 ports: port-keycloak port-kiali port-grafana
 	@echo ""
-	@echo ">>> All port-forwards started in background"
+	@echo ">>> All port-forwards started"
 	@echo "    Keycloak: http://localhost:8080"
 	@echo "    Kiali:    http://localhost:20001"
 	@echo "    Grafana:  http://localhost:3000"
-	@echo ""
-	@echo "    Stop all: make ports-stop"
 
-# Ensure Keycloak port-forward is running (for test-jwt-auto)
 ensure-ports:
 	@if ! curl -s --connect-timeout 1 http://localhost:8080 >/dev/null 2>&1; then \
 		echo ">>> Starting Keycloak port-forward..."; \
@@ -529,18 +1081,21 @@ ports-stop:
 #  Monitoring
 # ============================================================
 dashboard:
-	@echo ">>> Opening Kiali dashboard..."
 	@$(ISTIOCTL) dashboard kiali
 
 grafana:
-	@echo ">>> Opening Grafana dashboard..."
 	@$(ISTIOCTL) dashboard grafana
 
 logs: logs-opa
 
 logs-opa:
 	@echo ">>> OPA decision logs (Ctrl+C to exit)"
+	@echo "    Each log entry shows: input, decision (allow/deny), rule matched"
 	@kubectl logs -l app=opa --tail=100 -f
+
+logs-pretty:
+	@echo ">>> OPA decision logs (pretty, recent 200 lines)"
+	@kubectl logs -l app=opa --tail=200 | python3 scripts/parse_opa_logs.py
 
 logs-frontend:
 	@kubectl logs -l app=frontend -c frontend --tail=50 -f

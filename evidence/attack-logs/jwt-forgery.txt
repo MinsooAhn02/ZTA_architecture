@@ -1,0 +1,17 @@
+=== JWT Forgery / Tampering Simulation ===
+[Phase 1] Obtain a real JWT from Keycloak
+
+[Phase 2] Show real JWT header/payload
+Header : {"alg":"RS256","typ" : "JWT","kid" : "asv5YXKFln3A1g-E9OzN0H-9wcFTmHOEYSA_DmQYyWw"}
+Payload: {"exp":1776171385,"iat":1776171085,"jti":"ebc64688-1faf-4737-87f9-bc5dc124d70b","iss":"http://localhost:8080/realms/myrealm","aud":"account","sub":"68bdd1a7-6110-40e1-96dd-f190319b60ac","typ":"Bearer","azp":"zta-client","session_state":"8c19afed-41a5-4ddd-882b-c77084d48e69","acr":"1","realm_access":{"roles":["default-roles-myrealm","offline_access","admin","uma_authorization"]},"resource_access":{"account":{"roles":["manage-account","manage-account-links","view-profile"]}},"scope":"profile email","sid":"8c19afed-41a5-4ddd-882b-c77084d48e69","email_verified":false,"preferred_username":"testuser"}
+
+[Phase 3] Tamper payload but keep original signature
+Tampered token prepared. Sending request to /api/admin ...
+Tampered token HTTP: 401
+pod "attack-jwt-tampered" deleted from default namespace
+
+[Control] Real token request
+Real token HTTP: 200
+pod "attack-jwt-real" deleted from default namespace
+
+[Result] Tampered token should return 401 if JWT signature validation is active.

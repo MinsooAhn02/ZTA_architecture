@@ -1,0 +1,224 @@
+
+==============================================================
+RUNNING ALL TESTS (A~E)
+- Each test prints REQUEST / EXPECT / RESULT / STATUS
+- Final section prints consolidated summary table
+==============================================================
+
+>>> Running test
+
+==============================================================
+SCENARIO A (North-South baseline checks)
+==============================================================
+
+[A-NS-1] No identity -> Frontend must deny
+REQUEST SIGNALS:
+  - method=GET path=/api/admin
+  - headers: (none)
+  - flow: client -> Istio PEP -> OPA PDP -> deny
+EXPECT: 403
+RESULT: 403
+STATUS: PASS
+
+[A-NS-2] role:admin header -> Frontend allow (demo baseline)
+REQUEST SIGNALS:
+  - method=GET path=/api/admin
+  - headers: role=admin
+  - flow: client -> Istio PEP -> OPA PDP(header rule) -> allow
+EXPECT: 200
+RESULT: 200
+STATUS: PASS
+SCENARIO A (NS): PASS
+
+>>> Running test-lateral
+
+==============================================================
+SCENARIO A (East-West lateral movement)
+==============================================================
+
+[A-EW-1] Rogue pod (no sidecar) -> backend direct
+REQUEST SIGNALS:
+  - source: pod without Istio sidecar/mTLS cert
+  - method=GET path=/ (backend service)
+  - flow: mTLS handshake expected to fail (or 403)
+EXPECT: 403,000,503
+RESULT: 403
+STATUS: PASS
+
+[A-EW-2] Wrong ServiceAccount(sidecar 있음) -> backend
+REQUEST SIGNALS:
+  - source SA=backend-sa (expected frontend-sa only)
+  - method=GET path=/
+  - flow: mTLS pass -> AuthorizationPolicy(SPIFFE principal) deny
+EXPECT: 403
+RESULT: 403
+STATUS: PASS
+
+[A-EW-3] Rogue pod (no sidecar) -> backend podIP:8080 direct
+REQUEST SIGNALS:
+  - source: pod without Istio sidecar
+  - target: backend pod IP:8080 (service name bypass attempt)
+  - flow: inbound Envoy/policy chain should still block
+EXPECT: 403,000,503
+RESULT: 503
+STATUS: PASS
+SCENARIO A (EW): PASS
+
+>>> Running test-fake
+
+[B-1] Forged JWT signature -> must fail authentication
+REQUEST SIGNALS:
+  - method=GET path=/api/admin
+  - forged token with invalid signature
+  - flow: invalid token -> no valid principal -> require-jwt deny (403)
+EXPECT: 403
+RESULT: 403
+STATUS: PASS
+
+>>> Running test-jwt-tampered
+
+[B-2] Tampered real JWT payload -> must fail authentication
+REQUEST SIGNALS:
+  - start from real token
+  - modify payload, keep original signature
+  - flow: Istio verifies signature against new payload -> mismatch -> 401
+EXPECT: 401
+RESULT: 401
+STATUS: PASS
+
+>>> Running test-jwt-auto
+
+[B-4] Valid Keycloak JWT -> allow
+REQUEST SIGNALS:
+  - obtain token from Keycloak realm=myrealm
+  - send Authorization: Bearer <valid token>
+  - flow: Istio authn pass -> OPA authz pass -> 200
+EXPECT: 200
+RESULT: 200
+STATUS: PASS
+
+>>> Running test-context
+
+==============================================================
+SCENARIO C (Context = role + method + path)
+==============================================================
+
+[C-1] role=user, GET /api/data
+REQUEST SIGNALS: allow expected (read + non-admin path)
+EXPECT: 200
+RESULT: 200
+STATUS: PASS
+
+[C-2] role=user, GET /api/admin
+REQUEST SIGNALS: deny expected (admin path restriction)
+EXPECT: 403
+RESULT: 403
+STATUS: PASS
+
+[C-3] role=user, POST /api/write
+REQUEST SIGNALS: deny expected (write requires admin)
+EXPECT: 403
+RESULT: 403
+STATUS: PASS
+
+[C-4] role=admin, POST /api/write
+REQUEST SIGNALS: allow expected (admin write privilege)
+EXPECT: 200
+RESULT: 200
+STATUS: PASS
+SCENARIO C: PASS
+
+>>> Running test-jwt-role
+
+==============================================================
+SCENARIO D (JWT claim-based authorization)
+==============================================================
+
+[D-1] admin JWT -> GET /api/admin
+REQUEST SIGNALS: Istio JWT verify pass + OPA claim(admin) allow
+EXPECT: 200
+RESULT: 200
+STATUS: PASS
+
+[D-2] viewer JWT -> GET /api/data
+REQUEST SIGNALS: Istio JWT verify pass + OPA viewer read allow
+EXPECT: 200
+RESULT: 200
+STATUS: PASS
+
+[D-3] viewer JWT -> GET /api/admin
+REQUEST SIGNALS: Istio JWT verify pass + OPA viewer admin path deny
+EXPECT: 403
+RESULT: 403
+STATUS: PASS
+
+[D-4] viewer JWT -> POST /api/write
+REQUEST SIGNALS: Istio JWT verify pass + OPA viewer write deny
+EXPECT: 403
+RESULT: 403
+STATUS: PASS
+SCENARIO D: PASS
+
+>>> Running test-posture
+
+==============================================================
+SCENARIO E (Device posture gate)
+==============================================================
+
+[E-1] admin JWT + X-Device-Firewall=enabled
+REQUEST SIGNALS: valid identity + healthy posture => allow
+EXPECT: 200
+RESULT: 200
+STATUS: PASS
+
+[E-2] admin JWT + X-Device-Firewall=disabled
+REQUEST SIGNALS: valid identity + risky posture => deny
+EXPECT: 403
+RESULT: 403
+STATUS: PASS
+SCENARIO E: PASS
+
+==============================================================
+FINAL SUMMARY (EXPECT vs RESULT)
+==============================================================
+CASE                                 | EXPECT     | RESULT     | STATUS
+--------------------------------------------------------------------------
+A-NS-1 no-identity deny              | 403        | 403        | PASS  
+  detail: GET /api/admin without Authorization/role headers
+A-NS-2 role-header allow             | 200        | 200        | PASS  
+  detail: GET /api/admin with role:admin header
+A-EW-1 rogue no-sidecar block        | 403,000,503 | 403        | PASS  
+  detail: pod without sidecar to backend service
+A-EW-2 wrong-sa deny                 | 403        | 403        | PASS  
+  detail: backend-sa principal rejected by backend policy
+A-EW-3 podip bypass deny             | 403,000,503 | 503        | PASS  
+  detail: rogue pod direct podIP call to backend:8080
+B-1 forged jwt reject                | 403        | 403        | PASS  
+  detail: invalid signature token to /api/admin
+B-2 tampered jwt reject              | 401        | 401        | PASS  
+  detail: real JWT payload modified then reused signature
+B-4 valid jwt allow                  | 200        | 200        | PASS  
+  detail: Keycloak issued token to /api/admin
+C-1 user get data allow              | 200        | 200        | PASS  
+  detail: role:user GET /api/data
+C-2 user get admin deny              | 403        | 403        | PASS  
+  detail: role:user GET /api/admin
+C-3 user post write deny             | 403        | 403        | PASS  
+  detail: role:user POST /api/write
+C-4 admin post write allow           | 200        | 200        | PASS  
+  detail: role:admin POST /api/write
+D-1 admin jwt admin path             | 200        | 200        | PASS  
+  detail: admin token GET /api/admin
+D-2 viewer jwt read allow            | 200        | 200        | PASS  
+  detail: viewer token GET /api/data
+D-3 viewer jwt admin deny            | 403        | 403        | PASS  
+  detail: viewer token GET /api/admin
+D-4 viewer jwt post deny             | 403        | 403        | PASS  
+  detail: viewer token POST /api/write
+E-1 posture enabled allow            | 200        | 200        | PASS  
+  detail: admin JWT + firewall enabled
+E-2 posture disabled deny            | 403        | 403        | PASS  
+  detail: admin JWT + firewall disabled
+--------------------------------------------------------------------------
+
+FINAL: PASS (all groups matched expected result)

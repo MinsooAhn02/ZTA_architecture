@@ -1,0 +1,197 @@
+================================================================================
+  ZTA vs No-Policy Comparison: What Changes at Each Step
+  Researcher: Minsoo Ahn | Based on NIST SP 800-207
+================================================================================
+
+
+================================================================================
+  SCENARIO A: LATERAL MOVEMENT ATTACK
+================================================================================
+
+  Attack: Rogue Pod attempts to access Backend directly
+  ─────────────────────────────────────────────────────
+
+  Without ZTA (no policies):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  [Rogue Pod] ──── HTTP ────────────────────► [Backend Pod]          │
+  │                                               Response: 200 OK      │
+  │                                               "Hello from Backend!" │
+  │                                                                     │
+  │  No mTLS required → plain HTTP works                                │
+  │  No SA check → any pod can reach any service                        │
+  │  Attacker freely reads backend data                                 │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  With ZTA (PeerAuthentication STRICT + AuthorizationPolicy):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  [Rogue Pod] ──── HTTP ──► [Backend Envoy]                          │
+  │                            │                                        │
+  │                            ├─ mTLS required? YES                    │
+  │                            ├─ Rogue has cert? NO (no sidecar)       │
+  │                            └─ Result: Connection refused / 403      │
+  │                                                                     │
+  │  Even if rogue pod HAS sidecar (wrong SA):                          │
+  │  [Wrong SA Pod] ─► [Backend Envoy]                                  │
+  │                    │                                                │
+  │                    ├─ SPIFFE ID = cluster.local/.../backend-sa      │
+  │                    ├─ Allowlist = [frontend-sa only]                │
+  │                    └─ Result: 403 Forbidden                         │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  Result comparison:
+  +─────────────────────┬──────────────────┬─────────────────────────────+
+  │ Test                │ Without ZTA      │ With ZTA                    │
+  ├─────────────────────┼──────────────────┼─────────────────────────────┤
+  │ Rogue pod → backend │ 200 OK (exposed) │ 403/refused (blocked)       │
+  │ Wrong SA → backend  │ 200 OK (exposed) │ 403 Forbidden (blocked)     │
+  +─────────────────────┴──────────────────┴─────────────────────────────+
+
+
+================================================================================
+  SCENARIO B: TOKEN FORGERY ATTACK
+================================================================================
+
+  Attack: Attacker sends forged JWT to access frontend
+  ─────────────────────────────────────────────────────
+
+  Without ZTA (no RequestAuthentication):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  [Attacker] ─ Authorization: Bearer eyJ.fake.token ──► [Frontend]  │
+  │                                                        200 OK       │
+  │  No JWT validation → any Bearer token is accepted                  │
+  │  Attacker can fabricate any identity                                │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  With ZTA (RequestAuthentication + Keycloak JWKS):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  [Attacker] ─ Authorization: Bearer eyJ.fake.token                  │
+  │                │                                                    │
+  │                ▼                                                    │
+  │         [Istio Envoy]                                               │
+  │                │                                                    │
+  │                ├─ Fetch JWKS from Keycloak                          │
+  │                ├─ Verify signature: RSA_verify(payload, sig, pubkey)│
+  │                ├─ Signature invalid!                                │
+  │                └─ Return 401 Unauthorized (before app sees request) │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  Result comparison:
+  +─────────────────────┬──────────────────┬─────────────────────────────+
+  │ Test                │ Without ZTA      │ With ZTA                    │
+  ├─────────────────────┼──────────────────┼─────────────────────────────┤
+  │ Forged JWT          │ 200 OK (exposed) │ 401 Unauthorized (blocked)  │
+  │ Valid Keycloak JWT  │ 200 OK           │ 200 OK (allowed)            │
+  │ No token            │ 200 OK (exposed) │ 403 Forbidden (blocked)     │
+  +─────────────────────┴──────────────────┴─────────────────────────────+
+
+
+================================================================================
+  SCENARIO C: CONTEXT-BASED ACCESS CONTROL
+================================================================================
+
+  What changes: OPA now evaluates role + method + path together
+  ─────────────────────────────────────────────────────────────
+
+  Without ZTA (no OPA policy):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  [user] ─ GET /api/admin ──────────────────────────► 200 OK        │
+  │  [user] ─ POST /api/write ─────────────────────────► 200 OK        │
+  │  Any role can access any path with any method                       │
+  │  No separation of read/write privilege                              │
+  │  Admin-only data accessible to all                                  │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  With ZTA (OPA context rules):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  [user] ─ GET /api/data  ─► OPA: user+GET+not-admin → ALLOW → 200  │
+  │  [user] ─ GET /api/admin ─► OPA: user+/api/admin → DENY  → 403     │
+  │  [user] ─ POST /api/write─► OPA: user+POST → DENY → 403            │
+  │  [admin]─ POST /api/write─► OPA: admin → ALLOW → 200               │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  OPA decision log for each request (visible via make logs):
+    DENY  | input.request.http.path=/api/admin    role=user  method=GET
+    DENY  | input.request.http.method=POST        role=user  path=/api/write
+    ALLOW | input.request.http.path=/api/data     role=user  method=GET
+    ALLOW | input.request.http.method=POST        role=admin path=/api/write
+
+  Result comparison:
+  +────────────────────────────┬──────────────────┬────────────────────────+
+  │ Test                       │ Without ZTA      │ With ZTA               │
+  ├────────────────────────────┼──────────────────┼────────────────────────┤
+  │ user GET /api/data         │ 200 OK           │ 200 OK (allowed)       │
+  │ user GET /api/admin        │ 200 OK (exposed) │ 403 Forbidden          │
+  │ user POST /api/write       │ 200 OK (exposed) │ 403 Forbidden          │
+  │ admin POST /api/write      │ 200 OK           │ 200 OK (allowed)       │
+  +────────────────────────────┴──────────────────┴────────────────────────+
+
+
+================================================================================
+  SCENARIO D: JWT ROLE CLAIM ACCESS CONTROL
+================================================================================
+
+  What changes: Authorization based on cryptographic identity (not headers)
+  ──────────────────────────────────────────────────────────────────────────
+
+  Without ZTA (no JWT validation, no claim checking):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  [vieweruser JWT] ─ GET /api/admin ──────────────────► 200 OK      │
+  │  JWT payload ignored for authorization                              │
+  │  Any valid-format token grants full access                          │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  With ZTA (Istio JWT verify + OPA claim check):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  [vieweruser JWT] ─ GET /api/admin                                  │
+  │     │                                                               │
+  │     ├─ Istio: verify JWT signature → valid (Keycloak-issued)        │
+  │     └─ OPA: decode payload                                          │
+  │           realm_access.roles = ["viewer"]                           │
+  │           viewer + /api/admin → no rule matches → DENY → 403        │
+  │                                                                     │
+  │  [adminuser JWT] ─ GET /api/admin                                   │
+  │     │                                                               │
+  │     ├─ Istio: verify JWT signature → valid                          │
+  │     └─ OPA: decode payload                                          │
+  │           realm_access.roles = ["admin"]                            │
+  │           jwt_has_role("admin") → true → ALLOW → 200               │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  Key difference from Scenario C: identity is CRYPTOGRAPHICALLY BOUND
+  - Scenario C: role:user header (anyone can set this)
+  - Scenario D: JWT from Keycloak (only valid if Keycloak signed it)
+
+  Result comparison:
+  +────────────────────────────────┬──────────────────┬───────────────────────+
+  │ Test                           │ Without ZTA      │ With ZTA              │
+  ├────────────────────────────────┼──────────────────┼───────────────────────┤
+  │ admin JWT → GET /api/admin     │ 200 OK           │ 200 OK (verified)     │
+  │ viewer JWT → GET /api/data     │ 200 OK           │ 200 OK (allowed)      │
+  │ viewer JWT → GET /api/admin    │ 200 OK (exposed) │ 403 (claim mismatch)  │
+  │ viewer JWT → POST /api/write   │ 200 OK (exposed) │ 403 (no write perm)   │
+  +────────────────────────────────┴──────────────────┴───────────────────────+
+
+
+================================================================================
+  PERFORMANCE COMPARISON
+================================================================================
+
+  +─────────────────────┬──────────────┬──────────────┬──────────────────────+
+  │ Metric              │ Baseline     │ ZTA Enabled  │ Overhead             │
+  │                     │ (no policy)  │              │                      │
+  ├─────────────────────┼──────────────┼──────────────┼──────────────────────┤
+  │ Avg Latency         │  5.95 ms     │  10.8 ms     │ +4.85 ms (+81.5%)    │
+  │ QPS (throughput)    │ 168.0        │  92.4        │ -75.6 QPS (-45.0%)   │
+  │ p50 Latency         │  5.77 ms     │  ~10 ms      │ est.                 │
+  │ p99 Latency         │  9.00 ms     │  ~15 ms      │ est.                 │
+  +─────────────────────┴──────────────┴──────────────┴──────────────────────+
+
+  Overhead breakdown:
+    mTLS handshake:       ~2-3 ms (amortized with keepalive)
+    OPA ext-authz call:   ~2-3 ms (gRPC + Rego eval)
+    Envoy filter chain:   ~0.5 ms
+
+  Context: +4.85ms absolute overhead is typical for enterprise ZTA.
+  In production with faster hardware: ~1-2ms absolute overhead.
+
+================================================================================

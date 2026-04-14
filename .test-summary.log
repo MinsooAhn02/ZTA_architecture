@@ -1,0 +1,18 @@
+A-NS-1 no-identity deny|403|403|PASS|GET /api/admin without Authorization/role headers
+A-NS-2 role-header allow|200|200|PASS|GET /api/admin with role:admin header
+A-EW-1 rogue no-sidecar block|403,000,503|403|PASS|pod without sidecar to backend service
+A-EW-2 wrong-sa deny|403|403|PASS|backend-sa principal rejected by backend policy
+A-EW-3 podip bypass deny|403,000,503|503|PASS|rogue pod direct podIP call to backend:8080
+B-1 forged jwt reject|403|403|PASS|invalid signature token to /api/admin
+B-2 tampered jwt reject|401|401|PASS|real JWT payload modified then reused signature
+B-4 valid jwt allow|200|200|PASS|Keycloak issued token to /api/admin
+C-1 user get data allow|200|200|PASS|role:user GET /api/data
+C-2 user get admin deny|403|403|PASS|role:user GET /api/admin
+C-3 user post write deny|403|403|PASS|role:user POST /api/write
+C-4 admin post write allow|200|200|PASS|role:admin POST /api/write
+D-1 admin jwt admin path|200|200|PASS|admin token GET /api/admin
+D-2 viewer jwt read allow|200|200|PASS|viewer token GET /api/data
+D-3 viewer jwt admin deny|403|403|PASS|viewer token GET /api/admin
+D-4 viewer jwt post deny|403|403|PASS|viewer token POST /api/write
+E-1 posture enabled allow|200|200|PASS|admin JWT + firewall enabled
+E-2 posture disabled deny|403|403|PASS|admin JWT + firewall disabled

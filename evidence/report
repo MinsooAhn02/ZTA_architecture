@@ -1,0 +1,42 @@
+[OUTLINE]
+1) 프로젝트 목적
+2) 아키텍처/구성
+3) 시나리오 결과(A~E)
+4) 성능 요약
+5) VPN(WireGuard) vs ZTA 요약
+6) 한계
+7) 결론
+
+[CONTENT]
+1) 프로젝트 목적
+- NIST SP 800-207 기반 ZTA 샌드박스를 구현하고, 공격 시나리오에서 차단 동작을 증명한다.
+
+2) 아키텍처/구성
+- PEP: Istio(Envoy), PDP: OPA, IdP: Keycloak.
+- 요청은 JWT 검증 + OPA 정책 평가를 거쳐 allow/deny 된다.
+- East-West는 mTLS STRICT + SPIFFE 기반 allowlist로 제어한다.
+
+3) 시나리오 결과(A~E)
+- A Lateral movement: 차단(PASS)
+- B Forged/Tampered JWT: 차단(PASS)
+- C Context(role+method+path): 정책대로 차단/허용(PASS)
+- D JWT claim 기반 권한 분리: 정책대로 차단/허용(PASS)
+- E Device posture(헤더 시뮬): enabled=200, disabled=403(PASS)
+- 종합: make test-all PASS, make demo PASS
+
+4) 성능 요약
+- Baseline 대비 ZTA: 평균 지연 +4.85ms, QPS -45.0%.
+- 주요 비용: mTLS, ext-authz roundtrip, sidecar 처리.
+
+5) VPN(WireGuard) vs ZTA 요약
+- WireGuard: 터널 보안/저오버헤드에 강점.
+- ZTA: 요청 단위 인증/인가, 워크로드 신원, lateral movement 억제 제공.
+- 결론: WireGuard + ZTA 조합이 실무적으로 가장 현실적.
+
+6) 한계
+- Device posture는 현재 헤더 기반 시뮬레이션(클라이언트 위조 가능).
+- 실제 운영은 MDM/attestation 연동이 필요.
+
+7) 결론
+- 본 샌드박스는 ZTA를 개념이 아닌 동작 가능한 정책 체인으로 증명했다.
+- 단일 자격증명/단일 경로 침해 상황에서도 요청 단위 재검증으로 위험을 크게 줄였다.

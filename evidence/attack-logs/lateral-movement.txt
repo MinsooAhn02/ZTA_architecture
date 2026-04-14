@@ -1,0 +1,16 @@
+=== Lateral Movement Attack Simulation ===
+[Phase 1] Reconnaissance: discover backend service
+Server:		10.96.0.10
+Address:	10.96.0.10:53
+
+
+Name:	backend.default.svc.cluster.local
+Address: 10.107.131.17
+
+
+[Phase 2] Direct service access attempt
+
+[Phase 3] Direct pod IP bypass attempt
+Backend pod IP: 10.244.0.40
+
+[Result] If ZTA policies are active, both attempts should be blocked (403/refused).
