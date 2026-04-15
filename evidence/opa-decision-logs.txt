@@ -1,42 +1,35 @@
 >>> OPA decision logs (pretty, recent 200 lines)
-DENY  | -    -                        | role=-        firewall=-
-DENY  | -    -                        | role=-        firewall=-
-DENY  | -    -                        | role=-        firewall=-
-DENY  | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=admin    firewall=-
-DENY  | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/data                | role=user     firewall=-
-DENY  | GET  /api/admin               | role=user     firewall=-
-DENY  | POST /api/write               | role=user     firewall=-
-ALLOW | POST /api/write               | role=admin    firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/data                | role=-        firewall=-
-DENY  | GET  /api/admin               | role=-        firewall=-
-DENY  | POST /api/write               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=enabled
-DENY  | GET  /api/admin               | role=-        firewall=disabled
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=enabled
-DENY  | GET  /api/admin               | role=-        firewall=disabled
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=enabled
-DENY  | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-DENY  | GET  /api/admin               | role=-        firewall=-
-DENY  | GET  /api/admin               | role=-        firewall=-
-DENY  | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-DENY  | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=enabled
-DENY  | GET  /api/admin               | role=-        firewall=disabled
-DENY  | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-DENY  | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=-
-ALLOW | GET  /api/admin               | role=-        firewall=enabled
-DENY  | GET  /api/admin               | role=-        firewall=disabled
+DENY  | -    -                        | role=-        fw=-        | id=none
+DENY  | -    -                        | role=-        fw=-        | id=none
+DENY  | -    -                        | role=-        fw=-        | id=none
+DENY  | GET  /api/admin               | role=-        fw=-        | id=none
+ALLOW | GET  /api/admin               | role=admin    fw=-        | id=header
+DENY  | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/data                | role=user     fw=-        | id=header
+DENY  | GET  /api/admin               | role=user     fw=-        | id=header
+DENY  | POST /api/write               | role=user     fw=-        | id=header
+ALLOW | POST /api/write               | role=admin    fw=-        | id=header
+ALLOW | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/data                | role=-        fw=-        | id=JWT
+DENY  | GET  /api/admin               | role=-        fw=-        | id=JWT
+DENY  | POST /api/write               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/admin               | role=-        fw=enabled  | id=JWT
+DENY  | GET  /api/admin               | role=-        fw=disabled | id=JWT
+DENY  | GET  /api/admin               | role=-        fw=-        | id=none
+ALLOW | GET  /api/admin               | role=admin    fw=-        | id=header
+DENY  | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/data                | role=user     fw=-        | id=header
+DENY  | GET  /api/admin               | role=user     fw=-        | id=header
+DENY  | POST /api/write               | role=user     fw=-        | id=header
+ALLOW | POST /api/write               | role=admin    fw=-        | id=header
+ALLOW | GET  /api/admin               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/data                | role=-        fw=-        | id=JWT
+DENY  | GET  /api/admin               | role=-        fw=-        | id=JWT
+DENY  | POST /api/write               | role=-        fw=-        | id=JWT
+ALLOW | GET  /api/admin               | role=-        fw=enabled  | id=JWT
+DENY  | GET  /api/admin               | role=-        fw=disabled | id=JWT

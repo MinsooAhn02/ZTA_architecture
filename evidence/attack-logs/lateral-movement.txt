@@ -9,8 +9,35 @@ Address: 10.107.131.17
 
 
 [Phase 2] Direct service access attempt
+* Host backend:80 was resolved.
+* IPv6: (none)
+* IPv4: 10.107.131.17
+*   Trying 10.107.131.17:80...
+* Established connection to backend (10.107.131.17 port 80) from 10.244.0.243 port 51422 
+* using HTTP/1.x
+> GET / HTTP/1.1
+> Host: backend
+> User-Agent: curl/8.19.0
+> Accept: */*
+> 
+* Request completely sent off
+* Recv failure: Connection reset by peer
+* closing connection #0
+command terminated with exit code 56
 
 [Phase 3] Direct pod IP bypass attempt
-Backend pod IP: 10.244.0.40
+Backend pod IP: 10.244.0.204
+*   Trying 10.244.0.204:8080...
+* Established connection to 10.244.0.204 (10.244.0.204 port 8080) from 10.244.0.243 port 39742 
+* using HTTP/1.x
+> GET / HTTP/1.1
+> Host: 10.244.0.204:8080
+> User-Agent: curl/8.19.0
+> Accept: */*
+> 
+* Request completely sent off
+* Recv failure: Connection reset by peer
+* closing connection #0
+command terminated with exit code 56
 
 [Result] If ZTA policies are active, both attempts should be blocked (403/refused).

@@ -2,8 +2,8 @@
 [Phase 1] Obtain a real JWT from Keycloak
 
 [Phase 2] Show real JWT header/payload
-Header : {"alg":"RS256","typ" : "JWT","kid" : "asv5YXKFln3A1g-E9OzN0H-9wcFTmHOEYSA_DmQYyWw"}
-Payload: {"exp":1776171385,"iat":1776171085,"jti":"ebc64688-1faf-4737-87f9-bc5dc124d70b","iss":"http://localhost:8080/realms/myrealm","aud":"account","sub":"68bdd1a7-6110-40e1-96dd-f190319b60ac","typ":"Bearer","azp":"zta-client","session_state":"8c19afed-41a5-4ddd-882b-c77084d48e69","acr":"1","realm_access":{"roles":["default-roles-myrealm","offline_access","admin","uma_authorization"]},"resource_access":{"account":{"roles":["manage-account","manage-account-links","view-profile"]}},"scope":"profile email","sid":"8c19afed-41a5-4ddd-882b-c77084d48e69","email_verified":false,"preferred_username":"testuser"}
+Header : {"alg":"RS256","typ" : "JWT","kid" : "n_WU7gVfI3P0l4-i89HZQMddaa58_p2PSxW5GILjr1M"}
+Payload: {"exp":1776243602,"iat":1776243302,"jti":"b1034d46-9657-4ada-ab3e-619035b4a124","iss":"http://localhost:8080/realms/myrealm","aud":"account","sub":"5dd12a37-e11c-4976-84e8-61972286a8f0","typ":"Bearer","azp":"zta-client","session_state":"7bac3445-65c1-40f2-9b2e-c5aab91a4dbe","acr":"1","realm_access":{"roles":["default-roles-myrealm","offline_access","admin","uma_authorization"]},"resource_access":{"account":{"roles":["manage-account","manage-account-links","view-profile"]}},"scope":"profile email","sid":"7bac3445-65c1-40f2-9b2e-c5aab91a4dbe","email_verified":false,"preferred_username":"testuser"}
 
 [Phase 3] Tamper payload but keep original signature
 Tampered token prepared. Sending request to /api/admin ...
