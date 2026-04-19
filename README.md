@@ -52,11 +52,14 @@ make test-all
 - k8s/: Kubernetes manifests and security policies (OPA Rego, Istio AuthzPolicy, JWT, mTLS)
 - scripts/: Attack simulation scripts (lateral movement, JWT forgery, device posture)
 - evidence/: Test results, OPA decision logs, performance comparison data
-- docs/: Threat model, defense layer analysis, unified deep-dive document
+- docs/: Project documentation
+  - `what-it-can-do.md`: Features, scenarios, test commands, dashboards
+  - `how-it-works.md`: Architecture, request flow, defense layers, NIST mapping
+  - `checklist.md`: Implementation and scenario verification status
+  - `threat-model.md`: Assets, adversaries, attack tree, bypass analysis
+  - `final-report-draft.md`: Compact final report
 - istio-1.28.3/: Istio binary/manifests (auto-downloaded by Makefile if missing)
 - Makefile: setup, deployment, test, demo, monitoring, cleanup automation
-- checklist.txt: project phase and verification tracker
-- explanation.txt: deep-dive architecture, scenario analysis, Q&A preparation
 
 ## Environment Setup (Windows 11 + WSL2)
 
