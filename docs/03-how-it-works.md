@@ -1,5 +1,7 @@
 # How It Works
 
+> Key terms used throughout this document (pod, mTLS, SPIFFE/SVID, East-West traffic, North-South traffic, Rego, gRPC) are defined in the [Introduction](00-intro.md).
+
 ## The Core Idea
 
 Traditional security operates like a castle with a moat: once you're inside the walls, everything trusts you.
@@ -24,6 +26,11 @@ These map directly to NIST SP 800-207 Figure 1, the reference architecture for Z
 ---
 
 ## How a Request Flows Through the System
+
+Two traffic directions are relevant to this architecture:
+
+- **North-South traffic** — requests entering the cluster from outside (external user → internal service). This is what firewalls traditionally guard. ZTA enforces JWT verification and OPA authorization on every inbound request.
+- **East-West traffic** — requests between services inside the cluster (pod → pod). This is the direction firewalls have no visibility into. ZTA enforces mTLS workload identity and SPIFFE-based allowlists on every internal connection.
 
 ```
 External Client
@@ -115,6 +122,9 @@ but also what you're doing and from where" layer.
 - Configured in: `k8s/opa-k8s.yaml` (Rego policy)
 - OPA logs every allow/deny decision to stdout for audit purposes.
 
+**Architectural note — OPA and the service mesh:**
+OPA runs with sidecar injection disabled (`sidecar.istio.io/inject: "false"`). This is intentional: injecting an Envoy sidecar into OPA would cause a circular dependency — the sidecar would call OPA for authorization on OPA's own traffic. As a result, the Envoy ↔ OPA gRPC channel (port 9191) is not mTLS-encrypted in this sandbox. The production mitigation is a NetworkPolicy restricting port 9191 to mesh-internal traffic only (see `k8s/opa-network-policy.yaml`).
+
 ---
 
 ## How JWT Authentication and Authorization Work Together
@@ -158,11 +168,13 @@ default allow = false
 # East-West: frontend-sa can GET non-admin paths
 allow if source = frontend-sa AND method = GET AND path ≠ /api/admin
 
-# North-South basic: role:admin header (demo-level, Scenario A/B)
+# ── DEMO SCAFFOLDING (Scenario A/C only — remove in production) ──
+# role:admin header → allow  [client-controllable, not cryptographically bound]
 allow if role header = admin AND device is healthy
 
-# Context-based: role:user can only GET non-admin (Scenario C)
+# role:user header → GET only, no /api/admin  [Scenario C: context control demo]
 allow if role header = user AND method = GET AND path ≠ /api/admin
+# ─────────────────────────────────────────────────────────────────
 
 # JWT claim admin: (Scenario D)
 allow if JWT has role:admin AND device is healthy
@@ -215,15 +227,8 @@ In production with connection reuse, OPA caching, and horizontal scaling, real o
 
 ## VPN vs ZTA: What's the Difference?
 
-| Capability                         | WireGuard VPN   | This ZTA Sandbox |
-| ---------------------------------- | --------------- | ---------------- |
-| Transport encryption               | Yes             | Yes              |
-| Per-request authentication         | No              | Yes              |
-| Role / method / path authorization | No              | Yes              |
-| East-west lateral movement control | Limited         | Yes              |
-| Device posture gating              | No              | Yes (simulated)  |
-| Per-request audit logs             | No              | Yes              |
-| Estimated latency overhead         | ~0.1–3 ms       | +4.85 ms         |
+VPN secures the transport tunnel — once connected, internal traffic is trusted broadly. ZTA secures the individual request — every request is re-evaluated regardless of how the caller connected.
 
-VPN secures the tunnel. ZTA secures the request. They are complementary, not alternatives.
-The recommended production stack is: WireGuard for network entry + ZTA inside the cluster.
+They are complementary. The recommended production configuration is WireGuard (or equivalent) for network-layer entry, combined with ZTA inside the cluster for per-request enforcement.
+
+For a full capability comparison, see the [Introduction](00-intro.md#2-why-traditional-security-falls-short) and `evidence/vpn-zta-comparison.txt`.

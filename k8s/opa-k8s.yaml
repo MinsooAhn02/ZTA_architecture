@@ -40,35 +40,33 @@ data:
         not startswith(http_request.path, "/api/admin")
     }
 
-    # ──────────────────────────────────────────────────────────
-    # [North-South: Simple Role Header]
-    # Scenario A/B 기본 검증용 (테스트 편의)
+    # ══════════════════════════════════════════════════════════
+    # [DEMO SCAFFOLDING — Scenario A/C only]
+    # 헤더 기반 role 체크: 클라이언트가 직접 조작 가능한 신뢰할 수 없는 값
+    # Scenario C는 이 취약점을 의도적으로 시연 → Scenario D(JWT)가 이를 대체
     #
-    # role:admin 헤더 → 모든 경로/메서드 허용
-    # 실제 환경에서는 이 헤더를 클라이언트가 직접 조작 가능
-    # → JWT 기반 검증(Scenario D)이 더 안전함
-    # ──────────────────────────────────────────────────────────
+    # Production에서는 이 블록 전체 제거, JWT 경로(아래)만 사용할 것
+    # ══════════════════════════════════════════════════════════
+
+    # Scenario A 테스트: role:admin 헤더 → 기본 통과 시연
     allow {
         http_request.headers.role == "admin"
         device_posture_ok(http_request)
     }
 
-    # ──────────────────────────────────────────────────────────
-    # [Scenario C: Context-Based Access Control]
-    # "context" = (신원 role) + (HTTP 메서드) + (요청 경로)
-    #
-    # role:user → GET만 허용, /api/admin 경로는 접근 불가
-    # 근거:
-    #   - 읽기(GET)는 낮은 위험, 쓰기(POST)는 높은 위험 → 분리
-    #   - /api/admin은 고감도 데이터 → role:admin만 허용
-    #   - NIST 800-207 §3.3: "access to resources is determined
-    #     by dynamic policy including attributes of the request"
-    # ──────────────────────────────────────────────────────────
+    # Scenario C: role:user → GET만 허용, /api/admin 차단
+    # 목적: "인증된 사용자도 컨텍스트에 따라 제한됨" 시연
+    # 한계: 헤더 값은 클라이언트가 임의 설정 가능 → Scenario D로 보완
     allow {
         http_request.headers.role == "user"
         http_request.method == "GET"
         not startswith(http_request.path, "/api/admin")
     }
+
+    # ══════════════════════════════════════════════════════════
+    # [PRODUCTION PATH — Scenario D/E]
+    # JWT 클레임 기반: Istio가 서명 검증 후 OPA가 인가 결정
+    # ══════════════════════════════════════════════════════════
 
     # ──────────────────────────────────────────────────────────
     # [Scenario D: JWT Role Claim-Based Access Control]
@@ -130,8 +128,17 @@ data:
 ---
 # ============================================================
 #  OPA Deployment
-#  - sidecar.istio.io/inject: "false" → OPA는 메시 외부(PDP)
-#  - decision_logs.console=true → OPA 로그로 모든 결정 추적 가능
+#
+#  sidecar.istio.io/inject: "false" — 의도적 설계 결정
+#  이유: OPA에 Envoy 사이드카를 주입하면 순환 의존성 발생
+#    Envoy → OPA 호출(ext-authz) → OPA의 사이드카가 다시 OPA에 인가 요청
+#    → 무한 루프. OPA는 메시의 PDP로서 메시 외부에 위치해야 함.
+#
+#  Sandbox 한계: Envoy ↔ OPA 구간(gRPC :9191)이 평문.
+#  Production 대응: NetworkPolicy로 포트 9191을 mesh-internal 트래픽만
+#    허용하도록 제한 (k8s/opa-network-policy.yaml 참고).
+#
+#  - decision_logs.console=true → OPA 결정 로그 전체 추적 가능
 #  - envoy_ext_authz_grpc: Envoy와 gRPC로 통신
 # ============================================================
 apiVersion: apps/v1

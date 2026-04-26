@@ -352,6 +352,11 @@ apply-microseg:
 	@kubectl apply -f k8s/peer-auth.yaml
 	@kubectl apply -f k8s/authz-policy-backend.yaml
 
+apply-opa-network-policy:
+	@echo ">>> Applying OPA NetworkPolicy (restricts gRPC port 9191 to mesh-internal only)..."
+	@echo "    Note: requires CNI with NetworkPolicy support (Calico). Skipped on default Minikube."
+	@kubectl apply -f k8s/opa-network-policy.yaml 2>/dev/null || echo "    NetworkPolicy not applied (CNI may not support it)"
+
 apply-jwt:
 	@echo ">>> Applying JWT authentication policy..."
 	@kubectl apply -f k8s/jwt-auth.yaml
@@ -517,6 +522,8 @@ test-block:
 test-pass:
 	@echo ""
 	@echo "[A-NS-2] role:admin header -> Frontend allow (demo baseline)"
+	@echo "NOTE: Uses demo-scaffolding header rule (DEMO SCAFFOLDING block in opa-k8s.yaml)"
+	@echo "      This rule is intentionally weak — Scenario D (JWT) is the production-valid path"
 	@echo "REQUEST SIGNALS:"
 	@echo "  - method=GET path=/api/admin"
 	@echo "  - headers: role=admin"

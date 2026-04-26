@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(wsl:*)",
-      "Read(//mnt/c/Users/dksal/zta-project/**)"
+      "Read(//mnt/c/Users/dksal/zta-project/**)",
+      "WebSearch",
+      "WebFetch(domain:ieeexplore.ieee.org)",
+      "WebFetch(domain:doi.org)",
+      "WebFetch(domain:api.semanticscholar.org)"
     ]
   }
 }

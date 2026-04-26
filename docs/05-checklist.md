@@ -132,7 +132,8 @@ Here is what was added or completed during implementation:
 | Limitation                                      | Scope                  | Production Path                               |
 | ----------------------------------------------- | ---------------------- | --------------------------------------------- |
 | Device posture header is client-controllable    | Scenario E demo only   | MDM / endpoint attestation signal injection   |
-| role:admin header can be forged by any client   | Scenarios A/B/C        | Use Scenario D JWT-only mode in production    |
+| role:admin header active alongside JWT path     | Scenarios A/C demo scaffolding | Remove header rules; enforce JWT-only (Scenario D) |
+| Envoy ↔ OPA gRPC channel is plaintext           | Structural (circular dependency prevents sidecar injection) | NetworkPolicy restricting port 9191 to mesh-internal only (`k8s/opa-network-policy.yaml`) |
 | VPN comparison is benchmark-based, not direct   | Performance section    | Same-host A/B measurement on cloud hardware   |
 | Cluster-admin compromise breaks all controls    | Out of scope           | IAM hardening, audit, network policy          |
 | Keycloak private key compromise invalidates JWT | Out of scope           | Key rotation policy, HSM storage              |

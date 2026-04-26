@@ -52,12 +52,14 @@ make test-all
 - k8s/: Kubernetes manifests and security policies (OPA Rego, Istio AuthzPolicy, JWT, mTLS)
 - scripts/: Attack simulation scripts (lateral movement, JWT forgery, device posture)
 - evidence/: Test results, OPA decision logs, performance comparison data
-- docs/: Project documentation
-  - `what-it-can-do.md`: Features, scenarios, test commands, dashboards
-  - `how-it-works.md`: Architecture, request flow, defense layers, NIST mapping
-  - `checklist.md`: Implementation and scenario verification status
-  - `threat-model.md`: Assets, adversaries, attack tree, bypass analysis
-  - `final-report-draft.md`: Compact final report
+- docs/: Project documentation (read in order)
+  - `00-intro.md`: Why ZTA — attack scenario, comparison with traditional security, key terms
+  - `01-what-it-can-do.md`: Features, scenarios, test commands, dashboards
+  - `02-threat-model.md`: Assets, adversaries, attack tree, bypass analysis
+  - `03-how-it-works.md`: Architecture, request flow, defense layers, NIST mapping
+  - `04-added.md`: What was added beyond the original proposal
+  - `05-checklist.md`: Implementation and scenario verification status
+  - `06-final-report-draft.md`: Final report for submission
 - istio-1.28.3/: Istio binary/manifests (auto-downloaded by Makefile if missing)
 - Makefile: setup, deployment, test, demo, monitoring, cleanup automation
 

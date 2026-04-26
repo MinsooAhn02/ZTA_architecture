@@ -1,0 +1,32 @@
+# ============================================================
+#  NetworkPolicy: OPA gRPC 포트 접근 제한
+#
+#  목적: OPA sidecar injection이 불가(순환 의존성)한 대신,
+#        NetworkPolicy로 포트 9191(ext-authz gRPC)에 대한
+#        접근을 default namespace 내부 pod로만 제한.
+#
+#  적용 조건: CNI가 NetworkPolicy를 지원해야 함 (Calico 등)
+#  Minikube 기본 CNI(kindnet)는 미지원 → sandbox에서는 참고용
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opa-restrict-grpc
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: opa
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 9191
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+    - ports:
+        - protocol: TCP
+          port: 8181

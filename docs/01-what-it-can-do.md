@@ -1,5 +1,7 @@
 # What This Project Can Do
 
+> Key terms used throughout this document (pod, mTLS, SPIFFE/SVID, East-West traffic, North-South traffic, Rego, gRPC) are defined in the [Introduction](00-intro.md).
+
 ## Overview
 
 This sandbox proves that a Zero Trust Architecture (ZTA) can be built entirely from open-source tools
@@ -30,6 +32,8 @@ No implicit trust is granted, regardless of where the request comes from.
 
 ### Scenario A — Lateral Movement Defense
 
+**Why this matters:** Firewalls and VPNs stop traffic at the network boundary, but have no visibility into East-West traffic between internal services. Once an attacker is inside — via a compromised pod or stolen credential — nothing in a traditional setup prevents them from reaching other services freely.
+
 **What it is:** An attacker compromises one pod inside the cluster and tries to reach other services.
 
 **What it blocks:**
@@ -48,6 +52,8 @@ make test-lateral-podip      # direct pod IP call → blocked
 
 ### Scenario B — JWT Forgery & Tampering Defense
 
+**Why this matters:** Server-side token checks rely on each application implementing validation correctly. ZTA moves this to the infrastructure layer — Istio verifies the cryptographic signature before the request reaches any application code, making forgery impossible regardless of which service is targeted.
+
 **What it is:** An attacker tries to bypass authentication by crafting a fake token or modifying a real one.
 
 **What it blocks:**
@@ -64,6 +70,8 @@ make test-jwt-auto           # valid Keycloak JWT → 200
 ---
 
 ### Scenario C — Context-Based Access Control
+
+**Why this matters:** A valid identity is not sufficient authorization. A firewall or IDP only answers "is this user authenticated?" — not "should this user be allowed to POST to this admin endpoint right now?" OPA evaluates the full context of every request.
 
 **What it is:** Even authenticated users are restricted based on *what they are doing*, not just *who they are*.
 A `user` role can read general data but cannot write or access admin paths.
@@ -90,6 +98,8 @@ make test-context-admin-post  # admin + POST /api/write → 200
 
 ### Scenario D — JWT Role Claim Access Control
 
+**Why this matters:** Scenario C shows that header-only role claims are client-controllable — any caller can set `role: admin`. This scenario closes that gap: the role is embedded in a JWT signed by Keycloak's private key, making it cryptographically tamper-proof.
+
 **What it is:** Identity comes from Keycloak (signed JWT), not a manually set HTTP header.
 Two users — `testuser` (admin) and `vieweruser` (viewer) — get different access based on their
 cryptographically-bound role claims.
@@ -108,6 +118,8 @@ make test-jwt-viewer-post     # viewer JWT → POST /api/write → 403
 ---
 
 ### Scenario E — Device Posture Gate
+
+**Why this matters:** Neither firewalls nor application proxies can deny access based on the health of the requesting device. A user with a valid token on a machine running software with a known critical vulnerability should not have the same access as a user on a healthy, patched device. ZTA makes device state a first-class input to the authorization decision.
 
 **What it is:** Even a user with a valid admin JWT is denied if their device is flagged as unhealthy.
 Posture is signaled via `X-Device-Firewall` header (simulation model for this sandbox).
