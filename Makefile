@@ -47,7 +47,7 @@ TEST_SUMMARY_FILE := .test-summary.log
         build-image rebuild-image \
 	prepare-summary print-summary \
         deploy-app deploy-keycloak deploy-opa deploy-all wait-pods \
-        patch-istio-mesh apply-authz apply-jwt apply-microseg \
+        patch-istio-mesh apply-authz apply-jwt apply-microseg jwt-refresh \
         setup-keycloak setup-keycloak-viewer open-keycloak open-kiali open-grafana \
         get-token get-token-viewer \
 	test test-block test-pass test-jwt test-jwt-auto test-fake test-jwt-tampered \
@@ -85,7 +85,7 @@ all: setup ports
 	@echo ""
 
 # All tests: Scenario A + B + C + D + E(device posture)
-test-all: ensure-ports prepare-summary
+test-all: ensure-ports prepare-summary jwt-refresh setup-keycloak-viewer
 	@echo ""
 	@echo "=============================================================="
 	@echo "RUNNING ALL TESTS (A~E)"
@@ -178,6 +178,7 @@ help:
 	@echo ""
 	@echo "  Scenario B: JWT Authentication"
 	@echo "  ─────────────────────────────────────"
+	@echo "    make jwt-refresh         Force JWKS sync + verifier refresh"
 	@echo "    make test-fake            Forged JWT -> 403"
 	@echo "    make test-jwt-tampered    Real JWT payload tampered -> 401"
 	@echo "    make test-jwt-auto        Valid Keycloak JWT -> 200"
@@ -362,6 +363,12 @@ apply-jwt:
 	@kubectl apply -f k8s/jwt-auth.yaml
 	@-kubectl apply -f k8s/jwt-require-policy.yaml 2>/dev/null || true
 
+jwt-refresh:
+	@echo ">>> Refreshing JWT verifier state (JWKS sync + Istio/frontend restart)..."
+	@bash scripts/apply-jwt-inline-jwks.sh
+	@kubectl rollout restart deployment/istiod -n istio-system
+	@kubectl rollout status deployment/istiod -n istio-system --timeout=240s
+
 # ============================================================
 #  Keycloak
 # ============================================================
@@ -424,21 +431,29 @@ setup-keycloak-viewer:
 			-d '{"name":"viewer","description":"Read-only access, no admin paths, no write ops"}'; \
 		echo "    Created role: viewer"; \
 	fi; \
-	USER_CHECK=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users?username=vieweruser" \
+	VU_ID=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users?username=vieweruser" \
 		-H "Authorization: Bearer $$ADMIN_TOKEN" | python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')"); \
-	if [ -n "$$USER_CHECK" ]; then \
-		echo "    vieweruser already exists (Skip)"; \
+	if [ -n "$$VU_ID" ]; then \
+		echo "    vieweruser already exists (id: $$VU_ID)"; \
 	else \
 		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users" \
 			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
 			-d '{"username":"vieweruser","enabled":true,"credentials":[{"type":"password","value":"viewerpass","temporary":false}]}'; \
 		VU_ID=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users?username=vieweruser" \
 			-H "Authorization: Bearer $$ADMIN_TOKEN" | python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')"); \
+		echo "    Created: vieweruser / viewerpass (id: $$VU_ID)"; \
+	fi; \
+	if [ -z "$$VU_ID" ]; then echo "    ERROR: Failed to get/create vieweruser"; exit 1; fi; \
+	ROLE_CHECK=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users/$$VU_ID/role-mappings/realm" \
+		-H "Authorization: Bearer $$ADMIN_TOKEN" | python3 -c "import sys,json; roles=json.load(sys.stdin); print('viewer' if isinstance(roles,list) and any(r.get('name')=='viewer' for r in roles) else '')"); \
+	if [ "$$ROLE_CHECK" = "viewer" ]; then \
+		echo "    viewer role already assigned to vieweruser (Skip)"; \
+	else \
 		VROLE=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/roles/viewer" -H "Authorization: Bearer $$ADMIN_TOKEN"); \
 		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users/$$VU_ID/role-mappings/realm" \
 			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
 			-d "[$$VROLE]"; \
-		echo "    Created: vieweruser / viewerpass (role: viewer)"; \
+		echo "    Assigned viewer role to vieweruser"; \
 	fi; \
 	echo ""; \
 	echo "    Keycloak users:"; \
