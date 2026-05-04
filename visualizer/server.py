@@ -533,7 +533,7 @@ function renderCards() {
     var runCls = rid ? ' run' : '';
     var codes  = r ? (r.expect + ' &rarr; ' + r.result) : (m.signals.method + ' ' + m.signals.path);
 
-    html += '<div class="tc' + selCls + runCls + '" onclick="pick(\'' + id + '\')">' +
+    html += '<div class="tc' + selCls + runCls + '" data-id="' + id + '" onclick="pick(this.dataset.id)">' +
       '<div class="tid">' + id + '</div>' +
       '<div class="ttitle">' + m.title + '</div>' +
       '<div class="tdesc">'  + m.desc  + '</div>' +
