@@ -60,8 +60,34 @@ make test-all
   - `04-added.md`: What was added beyond the original proposal
   - `05-checklist.md`: Implementation and scenario verification status
   - `06-final-report-draft.md`: Final report for submission
+- visualizer/: Web-based security dashboard (server.py — live test runner + pipeline view)
 - istio-1.28.3/: Istio binary/manifests (auto-downloaded by Makefile if missing)
 - Makefile: setup, deployment, test, demo, monitoring, cleanup automation
+
+## ZTA Security Dashboard (Visualizer)
+
+A browser-based control panel that runs directly from WSL — no extra dependencies needed.
+
+**Start:**
+
+```bash
+python3 visualizer/server.py
+# Open: http://localhost:5001
+```
+
+**Features:**
+
+| Panel | What it does |
+|---|---|
+| Make Workflow | Click-to-run: step1 → step2 → step3 → step4 → test-all, with live terminal output |
+| ZTA Security Pipeline | Animated north-south / east-west attack flow — highlights which layer blocked the request |
+| Test Grid | All 18 scenario cards (A–E) with PASS/FAIL badges, filterable by scenario |
+| OPA Decision Log | Last 60 OPA allow/deny decisions with method, path, role, firewall |
+| Quick Commands | Port-forward, cluster status, JWT refresh, Keycloak setup |
+
+Requires WSL — the server shells out to `make` for live command execution.
+
+---
 
 ## Environment Setup (Windows 11 + WSL2)
 
