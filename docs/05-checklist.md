@@ -23,7 +23,7 @@
 | `testuser`   | `admin`  | Done   | All scenarios |
 | `vieweruser` | `viewer` | Done   | Scenario D |
 
-> To add `vieweruser` if missing: `make setup-keycloak-viewer`
+> `make test-all` automatically creates and role-assigns `vieweruser` if missing. To run manually: `make setup-keycloak-viewer`
 
 ---
 

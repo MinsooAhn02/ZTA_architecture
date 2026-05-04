@@ -155,7 +155,10 @@ What make setup does:
 6. Applies authorization and micro-segmentation policies
 
 Keycloak realm and users are configured automatically during `make setup`.
-To add the viewer user needed for Scenario D (if not already done):
+The viewer user (`vieweruser`) needed for Scenario D is created and role-assigned
+automatically when `make test-all` runs — no manual step required.
+
+To add or repair the viewer user outside of `test-all`:
 
 ```bash
 make setup-keycloak-viewer
