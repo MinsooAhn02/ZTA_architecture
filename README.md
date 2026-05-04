@@ -75,15 +75,39 @@ python3 visualizer/server.py
 # Open: http://localhost:5001
 ```
 
-**Features:**
+**Layout:**
 
-| Panel | What it does |
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Header: ZTA Security Dashboard  |  stats: Total / Pass / Fail       │
+│          service links: Keycloak · Grafana · Kiali                   │
+├─────────────────────┬────────────────────────────────────────────────┤
+│  LEFT               │  RIGHT                                         │
+│  Scenario cards     │  ZTA Security Pipeline (node animation)        │
+│  ─────────────────  │  ─────────────────────────────────────────     │
+│  Tabs: All / A / B  │  Request Journey (step-by-step flow)           │
+│        / C / D / E  │  ─────────────────────────────────────────     │
+│                     │  Why it was blocked (security insight)         │
+│  Click a card to:   │  ─────────────────────────────────────────     │
+│  • animate pipeline │  Defense layer + make target                   │
+│  • stream make log  │                                                │
+├─────────────────────┴────────────────────────────────────────────────┤
+│  Terminal: live make output (SSE stream from WSL)                    │
+├──────────────────────────────────────────────────────────────────────┤
+│  Bottom bar: step1 · step2 · step3 · step4 · test-all · ports · ...  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Panels:**
+
+| Area | What it does |
 |---|---|
-| Make Workflow | Click-to-run: step1 → step2 → step3 → step4 → test-all, with live terminal output |
-| ZTA Security Pipeline | Animated north-south / east-west attack flow — highlights which layer blocked the request |
-| Test Grid | All 18 scenario cards (A–E) with PASS/FAIL badges, filterable by scenario |
-| OPA Decision Log | Last 60 OPA allow/deny decisions with method, path, role, firewall |
-| Quick Commands | Port-forward, cluster status, JWT refresh, Keycloak setup |
+| Scenario cards (left) | 18 test cards (A–E), filterable by scenario group. Each card shows title, description, request signals (method / path / identity / role), and a PASS / FAIL / running badge. Click to select. |
+| ZTA Security Pipeline | Animated node graph for north-south (Client → Istio JWT → Istio DENY → OPA → App) and east-west (Rogue Pod → mTLS → SPIFFE → Backend) flows. Nodes light up green (passed) or red/pulsing (blocked) as the scenario plays. |
+| Request Journey | Step-by-step list showing exactly which layer passed the request and which one blocked it, with the specific policy rule shown inline at the block point. |
+| Why it was blocked | Per-scenario explanation of the underlying ZTA principle — what the attacker tried, which control stops it, and why it matters. |
+| Terminal (bottom) | Live `make` output streamed via SSE from WSL. Starts automatically when a card is clicked; also triggered by the bottom workflow buttons. |
+| Workflow buttons | One-click runners for `step1` / `step2` / `step3` / `step4` / `test-all` / `ports` / `status` / `jwt-refresh` / `opa-logs` / `add-viewer`. |
 
 Requires WSL — the server shells out to `make` for live command execution.
 
