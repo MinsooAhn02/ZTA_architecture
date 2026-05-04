@@ -31,24 +31,24 @@ RUNNABLE = {
 }
 
 TEST_META = {
-    "A-NS-1": {"title":"No identity deny","desc":"External client — no JWT, no role header","signals":{"method":"GET","path":"/api/admin","identity":"none"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"istio-deny","block_reason":"require-jwt AuthorizationPolicy: notRequestPrincipals -> DENY 403","defense_layer":"Istio Authorization Policy","make":"test-block"},
-    "A-NS-2": {"title":"role:admin header allow","desc":"Client sets role=admin HTTP header (demo scaffolding)","signals":{"method":"GET","path":"/api/admin","identity":"header","role":"admin"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA header rule: role=admin -> ALLOW 200 (demo path)","defense_layer":None,"make":"test-pass"},
-    "A-EW-1": {"title":"Rogue pod (no sidecar)","desc":"Compromised pod launched without Istio sidecar","signals":{"method":"GET","path":"/","identity":"none","source":"no-sidecar"},"pipeline":"ew","flow":["rogue-pod","mtls","spiffe","backend"],"block_at":"mtls","block_reason":"mTLS STRICT: no client certificate -> TLS fails 403/503","defense_layer":"Istio mTLS STRICT","make":"test-lateral-block"},
-    "A-EW-2": {"title":"Wrong ServiceAccount deny","desc":"Pod has sidecar but uses backend-sa; allowlist needs frontend-sa","signals":{"method":"GET","path":"/","identity":"spiffe","sa":"backend-sa"},"pipeline":"ew","flow":["rogue-pod","mtls","spiffe","backend"],"block_at":"spiffe","block_reason":"SPIFFE allowlist: backend-sa != frontend-sa -> DENY 403","defense_layer":"Istio SPIFFE Allowlist","make":"test-lateral-sidecar"},
-    "A-EW-3": {"title":"Pod IP bypass deny","desc":"Rogue pod targets backend podIP:8080 directly","signals":{"method":"GET","path":"/","identity":"none","target":"podIP:8080"},"pipeline":"ew","flow":["rogue-pod","mtls","spiffe","backend"],"block_at":"mtls","block_reason":"Inbound Envoy enforces policy even via pod IP -> 503","defense_layer":"Istio Inbound Policy","make":"test-lateral-podip"},
-    "B-1":    {"title":"Forged JWT reject","desc":"JWT crafted with attacker's key — signature invalid","signals":{"method":"GET","path":"/api/admin","identity":"JWT-forged"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"istio-jwt","block_reason":"Istio JWKS verify: RSA sig invalid -> no principal -> DENY 403","defense_layer":"Istio JWT Auth (JWKS)","make":"test-fake"},
-    "B-2":    {"title":"Tampered JWT reject","desc":"Real JWT payload modified (added admin), original signature kept","signals":{"method":"GET","path":"/api/admin","identity":"JWT-tampered"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"istio-jwt","block_reason":"RSA verify: new payload hash != original signature -> 401","defense_layer":"Istio JWT Auth (RSA verify)","make":"test-jwt-tampered"},
-    "B-4":    {"title":"Valid Keycloak JWT allow","desc":"testuser obtains valid Keycloak JWT and accesses admin endpoint","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"admin"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"JWKS OK -> principal OK -> OPA admin role OK -> 200","defense_layer":None,"make":"test-jwt-auto"},
-    "C-1":    {"title":"user GET /api/data allow","desc":"role=user reads the general data endpoint","signals":{"method":"GET","path":"/api/data","identity":"header","role":"user"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA: role=user + GET + non-admin path -> ALLOW 200","defense_layer":None,"make":"test-context-user-get"},
-    "C-2":    {"title":"user GET /api/admin deny","desc":"role=user requests admin endpoint — admin path restriction","signals":{"method":"GET","path":"/api/admin","identity":"header","role":"user"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA: role=user + path=/api/admin -> DENY 403","defense_layer":"OPA Context Policy (role+path)","make":"test-context-user-admin"},
-    "C-3":    {"title":"user POST /api/write deny","desc":"role=user attempts POST — write requires admin","signals":{"method":"POST","path":"/api/write","identity":"header","role":"user"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA: role=user + method=POST -> DENY 403","defense_layer":"OPA Context Policy (role+method)","make":"test-context-user-post"},
-    "C-4":    {"title":"admin POST /api/write allow","desc":"Admin user performing authorized write","signals":{"method":"POST","path":"/api/write","identity":"header","role":"admin"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA: role=admin + device_posture_ok -> ALLOW 200","defense_layer":None,"make":"test-context-admin-post"},
-    "D-1":    {"title":"admin JWT /api/admin allow","desc":"Keycloak JWT with realm_access.roles=[admin]","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"admin"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA jwt_has_role(admin) + device_posture_ok -> ALLOW 200","defense_layer":None,"make":"test-jwt-admin-all"},
-    "D-2":    {"title":"viewer JWT /api/data allow","desc":"vieweruser Keycloak JWT with roles=[viewer]","signals":{"method":"GET","path":"/api/data","identity":"JWT-valid","role":"viewer"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA jwt_has_role(viewer) + GET + non-admin -> ALLOW 200","defense_layer":None,"make":"test-jwt-viewer-read"},
-    "D-3":    {"title":"viewer JWT /api/admin deny","desc":"vieweruser JWT tries admin path","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"viewer"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA: jwt_has_role(viewer) + /api/admin -> DENY 403","defense_layer":"OPA JWT Claim Policy","make":"test-jwt-viewer-admin"},
-    "D-4":    {"title":"viewer JWT POST deny","desc":"vieweruser JWT attempts POST — viewer is read-only","signals":{"method":"POST","path":"/api/write","identity":"JWT-valid","role":"viewer"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA: jwt_has_role(viewer) + POST -> DENY 403","defense_layer":"OPA JWT Claim Policy","make":"test-jwt-viewer-post"},
-    "E-1":    {"title":"Posture enabled allow","desc":"Admin JWT + X-Device-Firewall: enabled","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"admin","posture":"enabled"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA device_posture_ok: firewall=enabled -> ALLOW 200","defense_layer":None,"make":"test-posture-ok"},
-    "E-2":    {"title":"Posture disabled deny","desc":"Stolen admin JWT but device unhealthy (firewall: disabled)","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"admin","posture":"disabled"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA device_posture_ok: firewall=disabled -> DENY 403","defense_layer":"OPA Device Posture Policy","make":"test-posture-block"},
+    "A-NS-1": {"title":"No identity deny","desc":"External client — no JWT, no role header","signals":{"method":"GET","path":"/api/admin","identity":"none"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"istio-deny","block_reason":"require-jwt AuthorizationPolicy: notRequestPrincipals -> DENY 403","defense_layer":"Istio Authorization Policy","make":"test-block","why":"Istio's require-jwt AuthorizationPolicy checks every incoming request for a verified JWT principal. A request with no token has no principal, so the notRequestPrincipals selector matches and Istio issues a DENY 403 before the request can reach OPA or the application — identity must be proven upfront."},
+    "A-NS-2": {"title":"role:admin header allow","desc":"Client sets role=admin HTTP header (demo scaffolding)","signals":{"method":"GET","path":"/api/admin","identity":"header","role":"admin"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA header rule: role=admin -> ALLOW 200 (demo path)","defense_layer":None,"make":"test-pass","why":"Demo scaffold path: OPA reads the role HTTP header directly and allows access when role=admin. This intentional shortcut exists to test OPA policy logic without needing a Keycloak token. Production uses cryptographically signed JWTs instead (see Scenario D)."},
+    "A-EW-1": {"title":"Rogue pod (no sidecar)","desc":"Compromised pod launched without Istio sidecar","signals":{"method":"GET","path":"/","identity":"none","source":"no-sidecar"},"pipeline":"ew","flow":["rogue-pod","mtls","spiffe","backend"],"block_at":"mtls","block_reason":"mTLS STRICT: no client certificate -> TLS fails 403/503","defense_layer":"Istio mTLS STRICT","make":"test-lateral-block","why":"PeerAuthentication STRICT forces every pod-to-pod connection to use mutual TLS. A pod launched without an Istio sidecar has no SPIFFE certificate to present during the TLS handshake. The destination Envoy rejects the connection immediately — no certificate means no entry, regardless of what the attacker sends."},
+    "A-EW-2": {"title":"Wrong ServiceAccount deny","desc":"Pod has sidecar but uses backend-sa; allowlist needs frontend-sa","signals":{"method":"GET","path":"/","identity":"spiffe","sa":"backend-sa"},"pipeline":"ew","flow":["rogue-pod","mtls","spiffe","backend"],"block_at":"spiffe","block_reason":"SPIFFE allowlist: backend-sa != frontend-sa -> DENY 403","defense_layer":"Istio SPIFFE Allowlist","make":"test-lateral-sidecar","why":"mTLS passes because the pod has a sidecar with a valid certificate. But Istio then inspects the SPIFFE identity (spiffe://cluster.local/ns/default/sa/...) embedded in that certificate. The AuthorizationPolicy allowlist only permits frontend-sa to reach the backend — backend-sa is not listed, so access is denied even with valid TLS."},
+    "A-EW-3": {"title":"Pod IP bypass deny","desc":"Rogue pod targets backend podIP:8080 directly","signals":{"method":"GET","path":"/","identity":"none","target":"podIP:8080"},"pipeline":"ew","flow":["rogue-pod","mtls","spiffe","backend"],"block_at":"mtls","block_reason":"Inbound Envoy enforces policy even via pod IP -> 503","defense_layer":"Istio Inbound Policy","make":"test-lateral-podip","why":"Hitting the pod IP directly instead of the Kubernetes Service does NOT bypass Istio. The Envoy sidecar on the destination pod intercepts all inbound traffic at the network level regardless of routing path. The same mTLS + policy checks apply — there is no way to sneak past Envoy by changing the destination address."},
+    "B-1":    {"title":"Forged JWT reject","desc":"JWT crafted with attacker's key — signature invalid","signals":{"method":"GET","path":"/api/admin","identity":"JWT-forged"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"istio-jwt","block_reason":"Istio JWKS verify: RSA sig invalid -> no principal -> DENY 403","defense_layer":"Istio JWT Auth (JWKS)","make":"test-fake","why":"Istio fetches the JWKS (public key set) from Keycloak and uses it to verify every JWT RSA signature. A token crafted with the attacker's own private key produces a signature that does not match any public key in the JWKS. Verification fails, no principal is set, and the require-jwt policy then denies the request."},
+    "B-2":    {"title":"Tampered JWT reject","desc":"Real JWT payload modified (added admin), original signature kept","signals":{"method":"GET","path":"/api/admin","identity":"JWT-tampered"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"istio-jwt","block_reason":"RSA verify: new payload hash != original signature -> 401","defense_layer":"Istio JWT Auth (RSA verify)","make":"test-jwt-tampered","why":"A JWT is header.payload.signature where the RSA signature cryptographically commits to the exact bytes of header+payload. Changing even one character in the payload produces a different hash — the original signature no longer matches. Istio detects the mismatch and rejects the token with 401, making JWTs tamper-evident by design."},
+    "B-4":    {"title":"Valid Keycloak JWT allow","desc":"testuser obtains valid Keycloak JWT and accesses admin endpoint","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"admin"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"JWKS OK -> principal OK -> OPA admin role OK -> 200","defense_layer":None,"make":"test-jwt-auto","why":"A legitimately issued Keycloak JWT carries the correct RSA signature and realm_access.roles=[admin]. Istio verifies the signature and sets the principal. OPA then decodes the JWT payload, confirms the admin role, and approves the request. This is the happy path through the full ZTA stack."},
+    "C-1":    {"title":"user GET /api/data allow","desc":"role=user reads the general data endpoint","signals":{"method":"GET","path":"/api/data","identity":"header","role":"user"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA: role=user + GET + non-admin path -> ALLOW 200","defense_layer":None,"make":"test-context-user-get","why":"OPA evaluates the combination of role, HTTP method, and path together. The policy allows role=user to perform GET on any non-admin path. All three context conditions are satisfied here — this demonstrates that least-privilege means users can read general data but nothing more."},
+    "C-2":    {"title":"user GET /api/admin deny","desc":"role=user requests admin endpoint — admin path restriction","signals":{"method":"GET","path":"/api/admin","identity":"header","role":"user"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA: role=user + path=/api/admin -> DENY 403","defense_layer":"OPA Context Policy (role+path)","make":"test-context-user-admin","why":"OPA restricts /api/admin to role=admin only. The user role fails the path check and is denied — even though the identity is valid and the method is a harmless GET. This is path-based context control: knowing WHO you are is not enough, you also need the right ROLE for the specific resource."},
+    "C-3":    {"title":"user POST /api/write deny","desc":"role=user attempts POST — write requires admin","signals":{"method":"POST","path":"/api/write","identity":"header","role":"user"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA: role=user + method=POST -> DENY 403","defense_layer":"OPA Context Policy (role+method)","make":"test-context-user-post","why":"OPA enforces method-level authorization: any write operation (POST/PUT/DELETE) requires role=admin regardless of path. A user may read but not write. This implements least-privilege at the HTTP verb level — read and write permissions are separated and enforced by policy, not application code."},
+    "C-4":    {"title":"admin POST /api/write allow","desc":"Admin user performing authorized write","signals":{"method":"POST","path":"/api/write","identity":"header","role":"admin"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA: role=admin + device_posture_ok -> ALLOW 200","defense_layer":None,"make":"test-context-admin-post","why":"All OPA conditions are satisfied: role=admin meets both the method (POST) and path (/api/write) rules, and device posture defaults to ok. This is the authorized write path — demonstrating that the policy correctly passes legitimate admin write operations."},
+    "D-1":    {"title":"admin JWT /api/admin allow","desc":"Keycloak JWT with realm_access.roles=[admin]","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"admin"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA jwt_has_role(admin) + device_posture_ok -> ALLOW 200","defense_layer":None,"make":"test-jwt-admin-all","why":"OPA uses io.jwt.decode to extract realm_access.roles from the JWT payload without trusting any HTTP header. It finds admin in the roles array. Combined with device posture ok, all conditions pass. The role claim comes directly from Keycloak's token — it cannot be spoofed via a header."},
+    "D-2":    {"title":"viewer JWT /api/data allow","desc":"vieweruser Keycloak JWT with roles=[viewer]","signals":{"method":"GET","path":"/api/data","identity":"JWT-valid","role":"viewer"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA jwt_has_role(viewer) + GET + non-admin -> ALLOW 200","defense_layer":None,"make":"test-jwt-viewer-read","why":"OPA decodes the JWT and finds roles=[viewer]. The viewer role is permitted to GET non-admin paths — read-only access to general data. This demonstrates role-based JWT claim authorization: the role is embedded in the token by Keycloak and verified cryptographically, not set by the caller."},
+    "D-3":    {"title":"viewer JWT /api/admin deny","desc":"vieweruser JWT tries admin path","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"viewer"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA: jwt_has_role(viewer) + /api/admin -> DENY 403","defense_layer":"OPA JWT Claim Policy","make":"test-jwt-viewer-admin","why":"The JWT signature is valid and Istio sets the principal — authentication succeeds. But OPA decodes the payload and finds only roles=[viewer]. The /api/admin path requires admin role, which viewer does not have. Access is denied at authorization. This separates authentication (who are you?) from authorization (what are you allowed to do?)."},
+    "D-4":    {"title":"viewer JWT POST deny","desc":"vieweruser JWT attempts POST — viewer is read-only","signals":{"method":"POST","path":"/api/write","identity":"JWT-valid","role":"viewer"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA: jwt_has_role(viewer) + POST -> DENY 403","defense_layer":"OPA JWT Claim Policy","make":"test-jwt-viewer-post","why":"viewer is explicitly a read-only role. OPA denies POST to any non-admin role. Even with a valid Keycloak-issued JWT, the authorization check fails — the token proves identity but not the permission to write. This enforces least-privilege: authentication does not imply authorization."},
+    "E-1":    {"title":"Posture enabled allow","desc":"Admin JWT + X-Device-Firewall: enabled","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"admin","posture":"enabled"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":None,"block_reason":"OPA device_posture_ok: firewall=enabled -> ALLOW 200","defense_layer":None,"make":"test-posture-ok","why":"OPA reads X-Device-Firewall from the request headers. A value of enabled signals a healthy device endpoint, satisfying the device_posture_ok check. Combined with a valid admin JWT, all ZTA conditions are met — identity, role, AND device health must all be ok for access."},
+    "E-2":    {"title":"Posture disabled deny","desc":"Stolen admin JWT but device unhealthy (firewall: disabled)","signals":{"method":"GET","path":"/api/admin","identity":"JWT-valid","role":"admin","posture":"disabled"},"pipeline":"ns","flow":["client","istio-jwt","istio-deny","opa","app"],"block_at":"opa","block_reason":"OPA device_posture_ok: firewall=disabled -> DENY 403","defense_layer":"OPA Device Posture Policy","make":"test-posture-block","why":"Even with a stolen valid admin JWT, OPA checks the device posture header. X-Device-Firewall: disabled fails the device_posture_ok rule and the request is denied. This is the core ZTA principle: identity alone is never sufficient — context (device health, location, time) must be continuously verified on every request."},
 }
 
 
@@ -315,6 +315,31 @@ body {
 .bb.bb-ng  { border-color: #da3633; color: #f85149; background: #2a0c0c; }
 .bot-ts { font-size: 10px; color: #484f58; margin-left: auto; }
 
+/* ── journey steps ── */
+.journey { margin: 0 0 12px; }
+.jstep { display: flex; align-items: flex-start; margin-left: 8px; padding: 5px 0 5px 16px; border-left: 2px solid #21262d; position: relative; }
+.jstep:last-child { border-left-color: transparent; }
+.jstep::before { content: ''; position: absolute; left: -5px; top: 10px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid #30363d; background: #0d1117; }
+.j-src::before   { border-color: #484f58; background: #21262d; }
+.j-pass::before  { border-color: #238636; background: #0a1f12; }
+.j-block::before { border-color: #da3633; background: #2a0c0c; }
+.j-skip::before  { border-color: #21262d; opacity: .35; }
+.jstep-body { flex: 1; }
+.jstep-row  { display: flex; align-items: center; gap: 8px; }
+.jstep-name { font-size: 12px; font-weight: 600; flex: 1; }
+.j-src  .jstep-name { color: #8b949e; }
+.j-pass .jstep-name { color: #3fb950; }
+.j-block .jstep-name { color: #f85149; }
+.j-skip .jstep-name { color: #484f58; }
+.jstep-badge { font-size: 10px; padding: 1px 7px; border-radius: 8px; font-weight: 700; border: 1px solid; white-space: nowrap; }
+.jb-src   { background: #21262d; color: #6e7681;  border-color: #30363d; }
+.jb-pass  { background: #0d2010; color: #3fb950;  border-color: #238636; }
+.jb-block { background: #2a0c0c; color: #f85149;  border-color: #da3633; }
+.jb-skip  { background: transparent; color: #30363d; border-color: #21262d; }
+.j-reason { font-size: 10.5px; color: #ffa198; font-family: monospace; margin-top: 5px; padding: 5px 8px; background: #1e0e0e; border-radius: 4px; border-left: 2px solid #da3633; line-height: 1.5; word-break: break-word; }
+/* ── security insight ── */
+.d-why { font-size: 12px; color: #c9d1d9; line-height: 1.65; margin-bottom: 12px; padding: 9px 11px; background: #0d1f38; border-radius: 5px; border-left: 3px solid #388bfd; }
+
 .hidden { display: none !important; }
 </style>
 </head>
@@ -471,6 +496,17 @@ var ARROW = {
   'opa':'arr-ns-3',       'app':'arr-ns-4',
   'mtls':'arr-ew-1',      'spiffe':'arr-ew-2', 'backend':'arr-ew-3'
 };
+var NODE_NAMES = {
+  'client':     'Client',
+  'istio-jwt':  'Istio JWT Auth (JWKS verify)',
+  'istio-deny': 'Istio DENY Policy (require-jwt)',
+  'opa':        'OPA Policy Engine (Rego eval)',
+  'app':        'Application Backend',
+  'rogue-pod':  'Rogue Pod (compromised)',
+  'mtls':       'mTLS STRICT (cert check)',
+  'spiffe':     'SPIFFE Allowlist (SA check)',
+  'backend':    'Backend Service'
+};
 
 // ── state ─────────────────────────────────────────────────────────────────
 var results  = {};
@@ -580,31 +616,70 @@ function pick(id) {
 // ── detail pane ───────────────────────────────────────────────────────────
 function renderDetail(id, m) {
   var s = m.signals;
+
+  // request signal tags
   var tags = '';
-  if (s.method)   tags += '<span class="tag t-m">'  + s.method   + '</span>';
-  if (s.path)     tags += '<span class="tag t-p">'  + s.path     + '</span>';
+  if (s.method)   tags += '<span class="tag t-m">' + s.method + '</span>';
+  if (s.path)     tags += '<span class="tag t-p">' + s.path + '</span>';
   if (s.identity) tags += '<span class="tag t-i">id:' + s.identity + '</span>';
-  if (s.role)     tags += '<span class="tag t-r">role:' + s.role  + '</span>';
+  if (s.role)     tags += '<span class="tag t-r">role:' + s.role + '</span>';
   if (s.posture === 'enabled')  tags += '<span class="tag t-ok">fw:enabled</span>';
   if (s.posture === 'disabled') tags += '<span class="tag t-ng">fw:disabled</span>';
-  if (s.sa)       tags += '<span class="tag t-sa">sa:' + s.sa    + '</span>';
+  if (s.sa)       tags += '<span class="tag t-sa">sa:' + s.sa + '</span>';
 
-  var isDeny  = (m.block_at !== null && m.block_at !== undefined);
+  // step-by-step request journey
+  var journey = '';
+  var reachedBlock = false;
+  for (var fi = 0; fi < m.flow.length; fi++) {
+    var nid    = m.flow[fi];
+    var nLabel = NODE_NAMES[nid] || nid;
+    var isBlock  = (nid === m.block_at);
+    var isSource = (fi === 0);
+    var isSkip   = reachedBlock;
+
+    var stepCls, badgeCls, badgeTxt;
+    if (isSource) {
+      stepCls = 'j-src';   badgeCls = 'jb-src';   badgeTxt = 'source';
+    } else if (isSkip) {
+      stepCls = 'j-skip';  badgeCls = 'jb-skip';  badgeTxt = 'skipped';
+    } else if (isBlock) {
+      stepCls = 'j-block'; badgeCls = 'jb-block'; badgeTxt = '&#x2717; BLOCKED HERE';
+    } else {
+      stepCls = 'j-pass';  badgeCls = 'jb-pass';  badgeTxt = '&#x2713; passed';
+    }
+
+    journey += '<div class="jstep ' + stepCls + '"><div class="jstep-body">';
+    journey += '<div class="jstep-row"><span class="jstep-name">' + nLabel + '</span>';
+    journey += '<span class="jstep-badge ' + badgeCls + '">' + badgeTxt + '</span></div>';
+    if (isBlock) {
+      journey += '<div class="j-reason">' + m.block_reason + '</div>';
+    }
+    journey += '</div></div>';
+    if (isBlock) reachedBlock = true;
+  }
+
+  var isDeny = (m.block_at !== null && m.block_at !== undefined);
   var verdict = isDeny ? '&#x2717; BLOCKED' : '&#x2713; ALLOWED';
   var vcls    = isDeny ? 'v-deny' : 'v-allow';
 
   var layer = m.defense_layer
-    ? '<div class="d-layer">Layer: <strong>' + m.defense_layer + '</strong></div>'
+    ? '<div class="d-layer">&#x1F6E1; Defense layer: <strong>' + m.defense_layer + '</strong></div>'
+    : '';
+
+  var insight = m.why
+    ? '<div class="d-sec">Why it was blocked</div><div class="d-why">' + m.why + '</div>'
     : '';
 
   g('detail').innerHTML =
     '<div class="d-sec">Attack &mdash; ' + id + '</div>' +
     '<div class="d-desc">' + m.desc + '</div>' +
     '<div class="tags">' + tags + '</div>' +
-    '<div class="d-sec">Defense Decision</div>' +
-    '<div class="verdict ' + vcls + '">' + verdict + ': ' + m.block_reason + '</div>' +
+    '<div class="d-sec">Request Journey</div>' +
+    '<div class="journey">' + journey + '</div>' +
+    '<div class="verdict ' + vcls + '">' + verdict + '</div>' +
     layer +
-    '<div class="d-make">make target: <code style="color:#79c0ff">' + m.make + '</code></div>';
+    insight +
+    '<div class="d-make">&#x1F9EA; make target: <code style="color:#79c0ff">' + m.make + '</code></div>';
 }
 
 // ── run make command ──────────────────────────────────────────────────────
