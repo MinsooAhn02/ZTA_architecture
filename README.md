@@ -68,12 +68,25 @@ make test-all
 
 A browser-based control panel that runs directly from WSL — no extra dependencies needed.
 
-**Start:**
+**Prerequisites:** Python 3 (standard library only — no pip installs required).
+
+**How to run (WSL Ubuntu terminal):**
 
 ```bash
+# 1. Make sure you are inside the project directory in WSL
+cd ~/ZTA_architecture          # or wherever you cloned the repo
+
+# 2. Start the dashboard server
 python3 visualizer/server.py
-# Open: http://localhost:5001
+
+# 3. Open in browser (Windows host)
+#    http://localhost:5001
 ```
+
+> **Important:** run from WSL, not PowerShell. The server shells out to `make`
+> for live command execution — `make` is only available inside WSL.
+
+**Stop:** `Ctrl+C` in the WSL terminal.
 
 **Layout:**
 
