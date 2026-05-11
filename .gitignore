@@ -2,3 +2,5 @@ istio-1.28.3/
 install files/
 *.exe
 .fronturl.tmp
+.claude-ignore
+.claude/
