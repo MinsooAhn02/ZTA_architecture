@@ -1,0 +1,40 @@
+
+>>> Performance Test (ZTA ON) - 200 requests
+==============================================
+[90m05:33:00.009 [37mr1 [90m[[32mINF[90m] periodic.go:882> [32mT000 ended after 1.372162543s : 200 calls. qps=145.755326889141[0m
+Ended after 1.372225215s : 200 calls. qps=145.75
+[90m05:33:00.009 [37mr1 [90m[[32mINF[90m] periodic.go:598> [32mRun ended[0m, [34mrun[0m=[32m0[0m, [34melapsed[0m=[32m1372225215[0m, [34mcalls[0m=[32m200[0m, [34mqps[0m=[32m145.7486699805323[0m
+Aggregated Function Time : count 200 avg 0.0068593787 +/- 0.001044 min 0.005649023 max 0.016888148 sum 1.37187575
+# range, mid point, percentile, count
+>= 0.00564902 <= 0.006 , 0.00582451 , 13.00, 26
+> 0.006 <= 0.007 , 0.0065 , 65.50, 105
+> 0.007 <= 0.008 , 0.0075 , 94.00, 57
+> 0.008 <= 0.009 , 0.0085 , 98.00, 8
+> 0.009 <= 0.01 , 0.0095 , 98.50, 1
+> 0.01 <= 0.011 , 0.0105 , 99.50, 2
+> 0.016 <= 0.0168881 , 0.0164441 , 100.00, 1
+# target 50% 0.00670476
+# target 75% 0.00733333
+# target 90% 0.00785965
+# target 99% 0.0105
+# target 99.9% 0.0167105
+Error cases : no data
+# Socket and IP used for each connection:
+[0]   1 socket used, resolved to 10.100.158.194:80, connection timing : count 1 avg 0.00053809 +/- 0 min 0.00053809 max 0.00053809 sum 0.00053809
+Connection time histogram (s) : count 1 avg 0.00053809 +/- 0 min 0.00053809 max 0.00053809 sum 0.00053809
+# range, mid point, percentile, count
+>= 0.00053809 <= 0.00053809 , 0.00053809 , 100.00, 1
+# target 50% 0.00053809
+# target 75% 0.00053809
+# target 90% 0.00053809
+# target 99% 0.00053809
+# target 99.9% 0.00053809
+Sockets used: 1 (for perfect keepalive, would be 1)
+Uniform: false, Jitter: false, Catchup allowed: true
+IP addresses distribution:
+10.100.158.194:80: 1
+Code 200 : 200 (100.0 %)
+Response Header Sizes : count 200 avg 165.005 +/- 0.07053 min 165 max 166 sum 33001
+Response Body/Total Sizes : count 200 avg 248.005 +/- 0.07053 min 248 max 249 sum 49601
+All done 200 calls (plus 0 warmup) 6.859 ms avg, 145.7 qps
+pod "fortio-zta" deleted from default namespace

@@ -1,0 +1,9 @@
+case,category,method,path,expect,code,avg_ms,p99_ms,qps
+allow-admin-jwt,allow,GET,/api/admin,200,200,5.940,7.89,168.3
+allow-viewer-jwt-data,allow,GET,/api/data,200,200,6.631,8.80,150.8
+allow-role-user-data,allow,GET,/api/data,200,200,6.581,9.00,151.9
+allow-posture-enabled,allow,GET,/api/admin,200,200,6.223,7.94,160.7
+block-no-identity,block,GET,/api/admin,403,403,2.015,4.00,496.0
+block-forged-jwt,block,GET,/api/admin,403,403,2.360,5.00,423.5
+block-tampered-jwt,block,GET,/api/admin,401,401,1.995,4.00,500.8
+block-posture-disabled,block,GET,/api/admin,403,403,2.908,5.50,343.7
