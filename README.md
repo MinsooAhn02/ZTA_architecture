@@ -31,14 +31,14 @@ This repository includes an automated Makefile workflow for:
 
 ## Security Scenarios
 
-| Scenario | Threat | Control | Verify |
-|---|---|---|---|
-| A: North-South | Unauthenticated external access | OPA role/JWT check | `make test-block`, `make test-pass` |
-| A: East-West | Compromised pod lateral movement | mTLS STRICT + SPIFFE allowlist | `make test-lateral` |
-| B: JWT Forgery | Forged / tampered JWT token | Istio JWKS signature verify | `make test-fake`, `make test-jwt-tampered` |
-| C: Context Access | Over-privileged request (wrong method/path) | OPA role+method+path policy | `make test-context` |
-| D: JWT Claim | Role escalation via JWT claim | OPA `io.jwt.decode` + Keycloak claim | `make test-jwt-role` |
-| E: Device Posture | Valid credential from unhealthy device | OPA `X-Device-Firewall` posture check | `make test-posture` |
+| Scenario          | Threat                                      | Control                               | Verify                                     |
+| ----------------- | ------------------------------------------- | ------------------------------------- | ------------------------------------------ |
+| A: North-South    | Unauthenticated external access             | OPA role/JWT check                    | `make test-block`, `make test-pass`        |
+| A: East-West      | Compromised pod lateral movement            | mTLS STRICT + SPIFFE allowlist        | `make test-lateral`                        |
+| B: JWT Forgery    | Forged / tampered JWT token                 | Istio JWKS signature verify           | `make test-fake`, `make test-jwt-tampered` |
+| C: Context Access | Over-privileged request (wrong method/path) | OPA role+method+path policy           | `make test-context`                        |
+| D: JWT Claim      | Role escalation via JWT claim               | OPA `io.jwt.decode` + Keycloak claim  | `make test-jwt-role`                       |
+| E: Device Posture | Valid credential from unhealthy device      | OPA `X-Device-Firewall` posture check | `make test-posture`                        |
 
 Run all scenarios at once:
 
@@ -133,14 +133,14 @@ python3 visualizer/server.py
 
 **Panels:**
 
-| Area | What it does |
-|---|---|
-| Scenario cards (left) | 18 test cards (A–E), filterable by scenario group. Each card shows title, description, request signals (method / path / identity / role), and a PASS / FAIL / running badge. Click to select. |
+| Area                  | What it does                                                                                                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scenario cards (left) | 18 test cards (A–E), filterable by scenario group. Each card shows title, description, request signals (method / path / identity / role), and a PASS / FAIL / running badge. Click to select.                              |
 | ZTA Security Pipeline | Animated node graph for north-south (Client → Istio JWT → Istio DENY → OPA → App) and east-west (Rogue Pod → mTLS → SPIFFE → Backend) flows. Nodes light up green (passed) or red/pulsing (blocked) as the scenario plays. |
-| Request Journey | Step-by-step list showing exactly which layer passed the request and which one blocked it, with the specific policy rule shown inline at the block point. |
-| Why it was blocked | Per-scenario explanation of the underlying ZTA principle — what the attacker tried, which control stops it, and why it matters. |
-| Terminal (bottom) | Live `make` output streamed via SSE from WSL. Starts automatically when a card is clicked; also triggered by the bottom workflow buttons. |
-| Workflow buttons | One-click runners for `step1` / `step2` / `step3` / `step4` / `test-all` / `ports` / `status` / `jwt-refresh` / `opa-logs` / `add-viewer`. |
+| Request Journey       | Step-by-step list showing exactly which layer passed the request and which one blocked it, with the specific policy rule shown inline at the block point.                                                                  |
+| Why it was blocked    | Per-scenario explanation of the underlying ZTA principle — what the attacker tried, which control stops it, and why it matters.                                                                                            |
+| Terminal (bottom)     | Live `make` output streamed via SSE from WSL. Starts automatically when a card is clicked; also triggered by the bottom workflow buttons.                                                                                  |
+| Workflow buttons      | One-click runners for `step1` / `step2` / `step3` / `step4` / `test-all` / `ports` / `status` / `jwt-refresh` / `opa-logs` / `add-viewer`.                                                                                 |
 
 Requires WSL — the server shells out to `make` for live command execution.
 
@@ -428,12 +428,12 @@ Re-run the install steps in this README and verify with version commands.
 
 ## NIST 800-207 Compliance Mapping
 
-| Tenet | Principle | Implementation |
-|---|---|---|
-| 1 | All data sources are resources | Backend, Keycloak, OPA each treated as protected resources |
-| 2 | All communication secured regardless of location | Istio mTLS STRICT (Scenario A) |
-| 3 | Access granted per session | JWT per-request validation, stateless (Scenario B/D) |
-| 4 | Access determined by dynamic policy | OPA role + method + path + posture context (Scenario C/D/E) |
-| 5 | Asset integrity monitored continuously | Kiali topology, Grafana metrics, OPA decision logs |
-| 6 | All authentication and authorization dynamic | No pre-approved sessions; every request re-evaluated |
-| 7 | Collect as much information as possible | Prometheus/Grafana metrics, OPA `decision_logs.console=true` |
+| Tenet | Principle                                        | Implementation                                               |
+| ----- | ------------------------------------------------ | ------------------------------------------------------------ |
+| 1     | All data sources are resources                   | Backend, Keycloak, OPA each treated as protected resources   |
+| 2     | All communication secured regardless of location | Istio mTLS STRICT (Scenario A)                               |
+| 3     | Access granted per session                       | JWT per-request validation, stateless (Scenario B/D)         |
+| 4     | Access determined by dynamic policy              | OPA role + method + path + posture context (Scenario C/D/E)  |
+| 5     | Asset integrity monitored continuously           | Kiali topology, Grafana metrics, OPA decision logs           |
+| 6     | All authentication and authorization dynamic     | No pre-approved sessions; every request re-evaluated         |
+| 7     | Collect as much information as possible          | Prometheus/Grafana metrics, OPA `decision_logs.console=true` |
