@@ -1,0 +1,39 @@
+All commands and output from this session will be recorded in container logs, including credentials and sensitive information passed through the command prompt.
+If you don't see a command prompt, try pressing enter.
+{"ts":1778478540.610370,"level":"info","r":1,"file":"periodic.go","line":882,"msg":"T000 ended after 1.316586289s : 200 calls. qps=151.9080076034424"}
+Ended after 1.31665209s : 200 calls. qps=151.9
+{"ts":1778478540.610446,"level":"info","r":1,"file":"periodic.go","line":598,"msg":"Run ended","run":0,"elapsed":1316652090,"calls":200,"qps":151.90041584941395}
+Aggregated Function Time : count 200 avg 0.0065813583 +/- 0.001025 min 0.004872102 max 0.011009401 sum 1.31627167
+# range, mid point, percentile, count
+>= 0.0048721 <= 0.005 , 0.00493605 , 2.50, 5
+> 0.005 <= 0.006 , 0.0055 , 29.50, 54
+> 0.006 <= 0.007 , 0.0065 , 70.00, 81
+> 0.007 <= 0.008 , 0.0075 , 90.50, 41
+> 0.008 <= 0.009 , 0.0085 , 99.00, 17
+> 0.009 <= 0.01 , 0.0095 , 99.50, 1
+> 0.011 <= 0.0110094 , 0.0110047 , 100.00, 1
+# target 50% 0.00650617
+# target 75% 0.0072439
+# target 90% 0.00797561
+# target 99% 0.009
+# target 99.9% 0.0110075
+Error cases : no data
+# Socket and IP used for each connection:
+[0]   1 socket used, resolved to 10.100.158.194:80, connection timing : count 1 avg 0.000121474 +/- 0 min 0.000121474 max 0.000121474 sum 0.000121474
+Connection time histogram (s) : count 1 avg 0.000121474 +/- 0 min 0.000121474 max 0.000121474 sum 0.000121474
+# range, mid point, percentile, count
+>= 0.000121474 <= 0.000121474 , 0.000121474 , 100.00, 1
+# target 50% 0.000121474
+# target 75% 0.000121474
+# target 90% 0.000121474
+# target 99% 0.000121474
+# target 99.9% 0.000121474
+Sockets used: 1 (for perfect keepalive, would be 1)
+Uniform: false, Jitter: false, Catchup allowed: true
+IP addresses distribution:
+10.100.158.194:80: 1
+Code 200 : 200 (100.0 %)
+Response Header Sizes : count 200 avg 166 +/- 0 min 166 max 166 sum 33200
+Response Body/Total Sizes : count 200 avg 389 +/- 0 min 389 max 389 sum 77800
+All done 200 calls (plus 0 warmup) 6.581 ms avg, 151.9 qps
+pod "fortio-allow-role-user-data" deleted from default namespace

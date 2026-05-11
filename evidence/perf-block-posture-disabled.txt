@@ -1,0 +1,93 @@
+All commands and output from this session will be recorded in container logs, including credentials and sensitive information passed through the command prompt.
+If you don't see a command prompt, try pressing enter.
+{"ts":1778478594.393892,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.397000,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.401379,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.404547,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.408205,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.411453,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.414553,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.417650,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.421348,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.424740,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.427852,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.430943,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.433625,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.437121,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.440169,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.443104,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.447356,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.450839,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.453789,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.457318,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.461122,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.464663,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.467638,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.470450,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.473494,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.476670,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.479530,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.482360,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.485158,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.488609,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.493184,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.496772,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.500100,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.503622,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.506524,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.509129,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.512213,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.515659,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.519073,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.521982,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.524801,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.527899,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.531130,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478594.531201,"level":"info","r":1,"file":"periodic.go","line":882,"msg":"T000 ended after 581.894449ms : 200 calls. qps=343.7049457057117"}
+Ended after 581.940482ms : 200 calls. qps=343.68
+{"ts":1778478594.531267,"level":"info","r":1,"file":"periodic.go","line":598,"msg":"Run ended","run":0,"elapsed":581940482,"calls":200,"qps":343.67775775392784}
+Aggregated Function Time : count 200 avg 0.0029081333 +/- 0.0007648 min 0.001848365 max 0.009742038 sum 0.581626657
+# range, mid point, percentile, count
+>= 0.00184837 <= 0.002 , 0.00192418 , 2.00, 4
+> 0.002 <= 0.003 , 0.0025 , 62.50, 121
+> 0.003 <= 0.004 , 0.0035 , 95.50, 66
+> 0.004 <= 0.005 , 0.0045 , 98.50, 6
+> 0.005 <= 0.006 , 0.0055 , 99.50, 2
+> 0.009 <= 0.00974204 , 0.00937102 , 100.00, 1
+# target 50% 0.00279339
+# target 75% 0.00337879
+# target 90% 0.00383333
+# target 99% 0.0055
+# target 99.9% 0.00959363
+Error cases : count 200 avg 0.0029081333 +/- 0.0007648 min 0.001848365 max 0.009742038 sum 0.581626657
+# range, mid point, percentile, count
+>= 0.00184837 <= 0.002 , 0.00192418 , 2.00, 4
+> 0.002 <= 0.003 , 0.0025 , 62.50, 121
+> 0.003 <= 0.004 , 0.0035 , 95.50, 66
+> 0.004 <= 0.005 , 0.0045 , 98.50, 6
+> 0.005 <= 0.006 , 0.0055 , 99.50, 2
+> 0.009 <= 0.00974204 , 0.00937102 , 100.00, 1
+# target 50% 0.00279339
+# target 75% 0.00337879
+# target 90% 0.00383333
+# target 99% 0.0055
+# target 99.9% 0.00959363
+# Socket and IP used for each connection:
+[0] 200 socket used, resolved to 10.100.158.194:80, connection timing : count 200 avg 0.00014345962 +/- 4.975e-05 min 7.6504e-05 max 0.000354318 sum 0.028691924
+Connection time histogram (s) : count 200 avg 0.00014345962 +/- 4.975e-05 min 7.6504e-05 max 0.000354318 sum 0.028691924
+# range, mid point, percentile, count
+>= 7.6504e-05 <= 0.000354318 , 0.000215411 , 100.00, 200
+# target 50% 0.000214713
+# target 75% 0.000284515
+# target 90% 0.000326397
+# target 99% 0.000351526
+# target 99.9% 0.000354039
+Sockets used: 200 (for perfect keepalive, would be 1)
+Uniform: false, Jitter: false, Catchup allowed: true
+IP addresses distribution:
+10.100.158.194:80: 200
+Code 403 : 200 (100.0 %)
+Response Header Sizes : count 200 avg 0 +/- 0 min 0 max 0 sum 0
+Response Body/Total Sizes : count 200 avg 131 +/- 0 min 131 max 131 sum 26200
+All done 200 calls (plus 0 warmup) 2.908 ms avg, 343.7 qps
+pod "fortio-block-posture-disabled" deleted from default namespace

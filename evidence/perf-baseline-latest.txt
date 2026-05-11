@@ -1,0 +1,40 @@
+
+>>> Baseline Performance Test (Policies OFF)
+==============================================
+WARNING: Run 'make clean' first to remove policies
+[90m05:32:27.585 [37mr1 [90m[[32mINF[90m] periodic.go:882> [32mT000 ended after 1.066739351s : 200 calls. qps=187.48722432758552[0m
+Ended after 1.066823526s : 200 calls. qps=187.47
+[90m05:32:27.585 [37mr1 [90m[[32mINF[90m] periodic.go:598> [32mRun ended[0m, [34mrun[0m=[32m0[0m, [34melapsed[0m=[32m1066823526[0m, [34mcalls[0m=[32m200[0m, [34mqps[0m=[32m187.47243112447072[0m
+Aggregated Function Time : count 200 avg 0.0053322589 +/- 0.001225 min 0.004469089 max 0.02111817 sum 1.06645178
+# range, mid point, percentile, count
+>= 0.00446909 <= 0.005 , 0.00473454 , 33.00, 66
+> 0.005 <= 0.006 , 0.0055 , 94.00, 122
+> 0.006 <= 0.007 , 0.0065 , 98.00, 8
+> 0.007 <= 0.008 , 0.0075 , 98.50, 1
+> 0.008 <= 0.009 , 0.0085 , 99.50, 2
+> 0.02 <= 0.0211182 , 0.0205591 , 100.00, 1
+# target 50% 0.00527869
+# target 75% 0.00568852
+# target 90% 0.00593443
+# target 99% 0.0085
+# target 99.9% 0.0208945
+Error cases : no data
+# Socket and IP used for each connection:
+[0]   1 socket used, resolved to 10.100.158.194:80, connection timing : count 1 avg 0.000228807 +/- 0 min 0.000228807 max 0.000228807 sum 0.000228807
+Connection time histogram (s) : count 1 avg 0.000228807 +/- 0 min 0.000228807 max 0.000228807 sum 0.000228807
+# range, mid point, percentile, count
+>= 0.000228807 <= 0.000228807 , 0.000228807 , 100.00, 1
+# target 50% 0.000228807
+# target 75% 0.000228807
+# target 90% 0.000228807
+# target 99% 0.000228807
+# target 99.9% 0.000228807
+Sockets used: 1 (for perfect keepalive, would be 1)
+Uniform: false, Jitter: false, Catchup allowed: true
+IP addresses distribution:
+10.100.158.194:80: 1
+Code 200 : 200 (100.0 %)
+Response Header Sizes : count 200 avg 165.005 +/- 0.07053 min 165 max 166 sum 33001
+Response Body/Total Sizes : count 200 avg 248.005 +/- 0.07053 min 248 max 249 sum 49601
+All done 200 calls (plus 0 warmup) 5.332 ms avg, 187.5 qps
+pod "fortio-baseline" deleted from default namespace

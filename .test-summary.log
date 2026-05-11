@@ -19,3 +19,4 @@ E-2 posture disabled deny|403|403|PASS|admin JWT + firewall disabled
 B-2 tampered jwt reject|401|401|PASS|real JWT payload modified then reused signature
 C-3 user post write deny|403|403|PASS|role:user POST /api/write
 B-1 forged jwt reject|403|403|PASS|invalid signature token to /api/admin
+B-4 valid jwt allow|200|200|PASS|Keycloak issued token to /api/admin

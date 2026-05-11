@@ -1,0 +1,36 @@
+All commands and output from this session will be recorded in container logs, including credentials and sensitive information passed through the command prompt.
+If you don't see a command prompt, try pressing enter.
+{"ts":1778478549.689159,"level":"info","r":1,"file":"periodic.go","line":882,"msg":"T000 ended after 1.244772509s : 200 calls. qps=160.6719288496112"}
+Ended after 1.244828998s : 200 calls. qps=160.66
+{"ts":1778478549.689229,"level":"info","r":1,"file":"periodic.go","line":598,"msg":"Run ended","run":0,"elapsed":1244828998,"calls":200,"qps":160.66463773042665}
+Aggregated Function Time : count 200 avg 0.0062225318 +/- 0.0007117 min 0.005053631 max 0.011920684 sum 1.24450635
+# range, mid point, percentile, count
+>= 0.00505363 <= 0.006 , 0.00552682 , 39.50, 79
+> 0.006 <= 0.007 , 0.0065 , 90.50, 102
+> 0.007 <= 0.008 , 0.0075 , 99.50, 18
+> 0.011 <= 0.0119207 , 0.0114603 , 100.00, 1
+# target 50% 0.00620588
+# target 75% 0.00669608
+# target 90% 0.0069902
+# target 99% 0.00794444
+# target 99.9% 0.0117365
+Error cases : no data
+# Socket and IP used for each connection:
+[0]   1 socket used, resolved to 10.100.158.194:80, connection timing : count 1 avg 0.00038784 +/- 0 min 0.00038784 max 0.00038784 sum 0.00038784
+Connection time histogram (s) : count 1 avg 0.00038784 +/- 0 min 0.00038784 max 0.00038784 sum 0.00038784
+# range, mid point, percentile, count
+>= 0.00038784 <= 0.00038784 , 0.00038784 , 100.00, 1
+# target 50% 0.00038784
+# target 75% 0.00038784
+# target 90% 0.00038784
+# target 99% 0.00038784
+# target 99.9% 0.00038784
+Sockets used: 1 (for perfect keepalive, would be 1)
+Uniform: false, Jitter: false, Catchup allowed: true
+IP addresses distribution:
+10.100.158.194:80: 1
+Code 200 : 200 (100.0 %)
+Response Header Sizes : count 200 avg 166 +/- 0 min 166 max 166 sum 33200
+Response Body/Total Sizes : count 200 avg 402 +/- 0 min 402 max 402 sum 80400
+All done 200 calls (plus 0 warmup) 6.223 ms avg, 160.7 qps
+pod "fortio-allow-posture-enabled" deleted from default namespace

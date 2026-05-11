@@ -1,0 +1,255 @@
+All commands and output from this session will be recorded in container logs, including credentials and sensitive information passed through the command prompt.
+If you don't see a command prompt, try pressing enter.
+warning: couldn't attach to pod/fortio-block-forged-jwt, falling back to streaming logs: error stream protocol error: unknown error
+{"ts":1778478574.575149,"level":"info","r":1,"file":"scli.go","line":124,"msg":"Starting","command":"Φορτίο","version":"1.75.1 h1:KJa0as+u9Ht9fcTyBlpQsdqJi9ysXpSpcOjDn4UxmCI= go1.25.8 amd64 linux","go-max-procs":28}
+Fortio 1.75.1 running at 0 queries per second, 28->28 procs, for 200 calls: http://frontend/api/admin
+{"ts":1778478574.575620,"level":"info","r":1,"file":"httprunner.go","line":121,"msg":"Starting http test","run":0,"url":"http://frontend/api/admin","threads":1,"qps":"-1.0","warmup":"parallel","conn-reuse":""}
+Starting at max qps with 1 thread(s) [gomax 28] for exactly 200 calls (200 per thread + 0)
+{"ts":1778478574.586090,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.588864,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.595194,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.598210,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.601126,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.604264,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.606948,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.609780,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.611926,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.614638,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.617472,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.619629,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.622450,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.625202,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.627567,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.630236,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.632897,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.636230,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.638503,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.641751,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.644867,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.647896,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.650096,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.652343,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.654663,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.657818,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.660136,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.662799,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.665453,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.667791,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.670273,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.672817,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.675615,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.678127,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.680225,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.682420,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.684641,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.686722,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.688807,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.690912,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.693965,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.696842,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.698816,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.700971,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.703192,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.705625,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.707957,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.710280,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.712650,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.714646,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.717169,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.719557,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.721761,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.724022,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.726191,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.728279,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.730189,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.732656,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.735500,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.737510,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.739903,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.742417,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.744905,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.747210,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.749022,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.750828,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.752472,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.754568,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.756551,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.758540,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.760283,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.762078,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.763949,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.765958,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.767879,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.769906,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.771733,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.773468,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.775113,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.776882,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.778845,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.781470,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.783393,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.785437,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.787447,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.789403,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.791406,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.793471,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.795875,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.798243,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.800293,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.802146,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.804172,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.806458,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.808848,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.810816,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.812684,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.814567,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.816804,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.819371,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.822361,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.824252,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.826614,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.828664,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.830714,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.832641,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.834608,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.836589,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.838961,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.841234,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.843249,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.845225,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.847367,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.849704,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.851684,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.854042,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.856615,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.858869,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.861291,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.863346,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.865876,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.869078,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.871183,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.873468,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.875484,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.877750,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.879878,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.881903,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.884268,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.886467,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.888806,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.891119,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.893140,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.895072,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.897023,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.898771,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.900933,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.903132,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.905332,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.907613,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.909874,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.913192,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.915571,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.918035,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.920182,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.922538,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.924736,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.927132,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.929876,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.932352,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.934582,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.937025,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.939396,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.942093,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.944291,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.948423,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.951519,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.953907,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.955949,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.958054,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.959857,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.962047,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.964948,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.966891,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.969003,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.971571,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.973993,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.976356,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.978959,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.981523,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.983953,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.985951,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.987953,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.990096,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.992429,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.994261,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.996060,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.997936,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478574.999869,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.001975,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.004058,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.006577,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.008775,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.011606,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.013966,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.015855,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.018333,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.020413,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.022299,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.024892,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.027838,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.029930,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.032290,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.035011,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.038701,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.041635,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.043627,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.045858,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.047659,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.049750,"level":"warn","r":1,"file":"http_client.go","line":1159,"msg":"Non ok http code","code":403,"status":"HTTP/1.1 403","thread":0,"run":0}
+{"ts":1778478575.049814,"level":"info","r":1,"file":"periodic.go","line":882,"msg":"T000 ended after 472.245965ms : 200 calls. qps=423.5081182747639"}
+Ended after 472.280386ms : 200 calls. qps=423.48
+{"ts":1778478575.049867,"level":"info","r":1,"file":"periodic.go","line":598,"msg":"Run ended","run":0,"elapsed":472280386,"calls":200,"qps":423.4772519221241}
+Aggregated Function Time : count 200 avg 0.0023600036 +/- 0.0006548 min 0.001640113 max 0.008600546 sum 0.472000716
+# range, mid point, percentile, count
+>= 0.00164011 <= 0.002 , 0.00182006 , 21.00, 42
+> 0.002 <= 0.003 , 0.0025 , 93.00, 144
+> 0.003 <= 0.004 , 0.0035 , 98.50, 11
+> 0.004 <= 0.005 , 0.0045 , 99.00, 1
+> 0.006 <= 0.007 , 0.0065 , 99.50, 1
+> 0.008 <= 0.00860055 , 0.00830027 , 100.00, 1
+# target 50% 0.00240278
+# target 75% 0.00275
+# target 90% 0.00295833
+# target 99% 0.005
+# target 99.9% 0.00848044
+Error cases : count 200 avg 0.0023600036 +/- 0.0006548 min 0.001640113 max 0.008600546 sum 0.472000716
+# range, mid point, percentile, count
+>= 0.00164011 <= 0.002 , 0.00182006 , 21.00, 42
+> 0.002 <= 0.003 , 0.0025 , 93.00, 144
+> 0.003 <= 0.004 , 0.0035 , 98.50, 11
+> 0.004 <= 0.005 , 0.0045 , 99.00, 1
+> 0.006 <= 0.007 , 0.0065 , 99.50, 1
+> 0.008 <= 0.00860055 , 0.00830027 , 100.00, 1
+# target 50% 0.00240278
+# target 75% 0.00275
+# target 90% 0.00295833
+# target 99% 0.005
+# target 99.9% 0.00848044
+# Socket and IP used for each connection:
+[0] 200 socket used, resolved to 10.100.158.194:80, connection timing : count 200 avg 0.00012794275 +/- 6.649e-05 min 5.4681e-05 max 0.000886862 sum 0.02558855
+Connection time histogram (s) : count 200 avg 0.00012794275 +/- 6.649e-05 min 5.4681e-05 max 0.000886862 sum 0.02558855
+# range, mid point, percentile, count
+>= 5.4681e-05 <= 0.000886862 , 0.000470771 , 100.00, 200
+# target 50% 0.000468681
+# target 75% 0.000677771
+# target 90% 0.000803226
+# target 99% 0.000878498
+# target 99.9% 0.000886026
+Sockets used: 200 (for perfect keepalive, would be 1)
+Uniform: false, Jitter: false, Catchup allowed: true
+IP addresses distribution:
+10.100.158.194:80: 200
+Code 403 : 200 (100.0 %)
+Response Header Sizes : count 200 avg 0 +/- 0 min 0 max 0 sum 0
+Response Body/Total Sizes : count 200 avg 131 +/- 0 min 131 max 131 sum 26200
+All done 200 calls (plus 0 warmup) 2.360 ms avg, 423.5 qps
+pod "fortio-block-forged-jwt" deleted from default namespace

@@ -1,0 +1,36 @@
+All commands and output from this session will be recorded in container logs, including credentials and sensitive information passed through the command prompt.
+If you don't see a command prompt, try pressing enter.
+{"ts":1778478523.569452,"level":"info","r":1,"file":"periodic.go","line":882,"msg":"T000 ended after 1.188276076s : 200 calls. qps=168.31105501445776"}
+Ended after 1.188314643s : 200 calls. qps=168.31
+{"ts":1778478523.569505,"level":"info","r":1,"file":"periodic.go","line":598,"msg":"Run ended","run":0,"elapsed":1188314643,"calls":200,"qps":168.3055924440039}
+Aggregated Function Time : count 200 avg 0.0059398203 +/- 0.0007842 min 0.005069527 max 0.014397236 sum 1.18796405
+# range, mid point, percentile, count
+>= 0.00506953 <= 0.006 , 0.00553476 , 65.50, 131
+> 0.006 <= 0.007 , 0.0065 , 95.00, 59
+> 0.007 <= 0.008 , 0.0075 , 99.50, 9
+> 0.014 <= 0.0143972 , 0.0141986 , 100.00, 1
+# target 50% 0.00577812
+# target 75% 0.00632203
+# target 90% 0.00683051
+# target 99% 0.00788889
+# target 99.9% 0.0143178
+Error cases : no data
+# Socket and IP used for each connection:
+[0]   1 socket used, resolved to 10.100.158.194:80, connection timing : count 1 avg 0.000126011 +/- 0 min 0.000126011 max 0.000126011 sum 0.000126011
+Connection time histogram (s) : count 1 avg 0.000126011 +/- 0 min 0.000126011 max 0.000126011 sum 0.000126011
+# range, mid point, percentile, count
+>= 0.000126011 <= 0.000126011 , 0.000126011 , 100.00, 1
+# target 50% 0.000126011
+# target 75% 0.000126011
+# target 90% 0.000126011
+# target 99% 0.000126011
+# target 99.9% 0.000126011
+Sockets used: 1 (for perfect keepalive, would be 1)
+Uniform: false, Jitter: false, Catchup allowed: true
+IP addresses distribution:
+10.100.158.194:80: 1
+Code 200 : 200 (100.0 %)
+Response Header Sizes : count 200 avg 166.005 +/- 0.07053 min 166 max 167 sum 33201
+Response Body/Total Sizes : count 200 avg 402.005 +/- 0.07053 min 402 max 403 sum 80401
+All done 200 calls (plus 0 warmup) 5.940 ms avg, 168.3 qps
+pod "fortio-allow-admin-jwt" deleted from default namespace

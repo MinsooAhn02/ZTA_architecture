@@ -46,6 +46,26 @@ Run all scenarios at once:
 make test-all
 ```
 
+## Scenario Selection Rationale (Report Note)
+
+The five scenarios were chosen to be representative, repeatable, and realistic for
+day-to-day attacker behavior in microservice environments. They cover both north-south
+and east-west paths and map directly to NIST SP 800-207 tenets.
+
+- A: Lateral movement is a common post-compromise behavior.
+- B: Forged or tampered JWTs are realistic API abuses.
+- C: Context misuse (method/path) shows why identity alone is insufficient.
+- D: Signed claim-based authorization closes header spoofing gaps.
+- E: Device posture highlights risk-based access decisions.
+
+## Reflection Summary (Report Note)
+
+- ZTA is a strong practical approach, but it is not perfect or exhaustive.
+- The initial setup and integration were the hardest part; the core flow was manageable.
+- Performance overhead was higher than expected, reinforcing the security vs. speed trade-off.
+- AI-assisted work helped iteration but did not replace manual validation.
+- Future work should target more efficient policy paths and stronger low-level isolation.
+
 ## Project Structure
 
 - app/: Flask frontend/backend source
