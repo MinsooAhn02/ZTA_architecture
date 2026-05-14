@@ -59,7 +59,7 @@ TEST_SUMMARY_FILE := .test-summary.log
 	test-posture test-posture-ok test-posture-block \
 	demo demo-lateral demo-jwt demo-context demo-jwt-role demo-posture demo-compare \
         test-perf test-perf-baseline test-perf-zta \
-        ports ensure-ports port-keycloak port-kiali port-grafana ports-stop \
+        ports ports-win ensure-ports port-keycloak port-kiali port-grafana ports-stop \
 	dashboard grafana logs logs-opa logs-frontend logs-backend logs-keycloak logs-pretty \
         clean-all restart \
 	visualizer
@@ -525,7 +525,7 @@ test-block:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=403; \
 	RESULT=$$(kubectl delete pod test-block --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-block --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-block --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	[ -z "$$RESULT" ] && RESULT="ERR"; \
 	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
@@ -547,7 +547,7 @@ test-pass:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=200; \
 	RESULT=$$(kubectl delete pod test-pass --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-pass --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-pass --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" -H "role: admin" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	[ -z "$$RESULT" ] && RESULT="ERR"; \
 	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
@@ -568,7 +568,7 @@ test-jwt:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=200; \
 	RESULT=$$(kubectl delete pod test-jwt --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-jwt --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-jwt --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	[ -z "$$RESULT" ] && RESULT="ERR"; \
 	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
@@ -588,7 +588,7 @@ test-fake:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=403; \
 	RESULT=$$(kubectl delete pod test-fake --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-fake --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-fake --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" \
 		   -H "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmYWtlIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9teXJlYWxtIn0.invalid" \
 		   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
@@ -621,7 +621,7 @@ test-jwt-tampered:
 		TAMPERED_PAYLOAD=$$(python3 -c "import base64,json; p={'sub':'tampered-user','realm_access':{'roles':['admin']}}; print(base64.urlsafe_b64encode(json.dumps(p,separators=(',',':')).encode()).decode().rstrip('='))"); \
 		TAMPERED="$$HEADER.$$TAMPERED_PAYLOAD.$$SIG"; \
 		RESULT=$$(kubectl delete pod test-jwt-tampered --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-jwt-tampered --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-jwt-tampered --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TAMPERED" \
 			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	fi; \
@@ -650,7 +650,7 @@ test-jwt-auto:
 		RESULT="NO_TOKEN"; \
 	else \
 		RESULT=$$(kubectl delete pod test-jwt-auto --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-jwt-auto --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-jwt-auto --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
 			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	fi; \
@@ -684,7 +684,7 @@ test-lateral-block:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED="403,000,503"; \
 	RESULT=$$(kubectl delete pod test-rogue --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-rogue --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-rogue --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://backend/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	[ -z "$$RESULT" ] && RESULT="ERR"; \
 	STATUS="FAIL"; \
@@ -705,7 +705,7 @@ test-lateral-sidecar:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=403; \
 	RESULT=$$(kubectl delete pod test-wrongsa --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-wrongsa --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-wrongsa --image=curlimages/curl --restart=Never -i \
 		--overrides='{"spec":{"serviceAccountName":"backend-sa"}}' \
 		-- curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://backend/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	[ -z "$$RESULT" ] && RESULT="ERR"; \
@@ -730,7 +730,7 @@ test-lateral-podip:
 		RESULT="NO_BACKEND_IP"; \
 	else \
 		RESULT=$$(kubectl delete pod test-rogue-podip --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-rogue-podip --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-rogue-podip --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://$$BACKEND_IP:8080/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	fi; \
 	[ -z "$$RESULT" ] && RESULT="ERR"; \
@@ -764,7 +764,7 @@ test-context-user-get:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=200; \
 	RESULT=$$(kubectl delete pod test-ctx-1 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-ctx-1 --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-ctx-1 --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" -H "role: user" http://frontend/api/data 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	[ -z "$$RESULT" ] && RESULT="ERR"; \
 	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
@@ -779,7 +779,7 @@ test-context-user-admin:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=403; \
 	RESULT=$$(kubectl delete pod test-ctx-2 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-ctx-2 --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-ctx-2 --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" -H "role: user" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	[ -z "$$RESULT" ] && RESULT="ERR"; \
 	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
@@ -794,7 +794,7 @@ test-context-user-post:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=403; \
 	RESULT=$$(kubectl delete pod test-ctx-3 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-ctx-3 --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-ctx-3 --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "role: user" \
 		   -H "Content-Type: application/json" -d '{"data":"test"}' \
 		   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
@@ -811,7 +811,7 @@ test-context-admin-post:
 	@touch $(TEST_SUMMARY_FILE)
 	@EXPECTED=200; \
 	RESULT=$$(kubectl delete pod test-ctx-4 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-ctx-4 --image=curlimages/curl --restart=Never --rm -i \
+		kubectl run test-ctx-4 --image=curlimages/curl --restart=Never -i \
 		-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "role: admin" \
 		   -H "Content-Type: application/json" -d '{"data":"admin-write"}' \
 		   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
@@ -848,7 +848,7 @@ test-jwt-admin-all:
 		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
 		RESULT=$$(kubectl delete pod test-d1 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-d1 --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-d1 --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
 			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	fi; \
@@ -870,7 +870,7 @@ test-jwt-viewer-read:
 		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
 		RESULT=$$(kubectl delete pod test-d2 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-d2 --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-d2 --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
 			   http://frontend/api/data 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	fi; \
@@ -892,7 +892,7 @@ test-jwt-viewer-admin:
 		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
 		RESULT=$$(kubectl delete pod test-d3 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-d3 --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-d3 --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
 			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	fi; \
@@ -914,7 +914,7 @@ test-jwt-viewer-post:
 		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
 		RESULT=$$(kubectl delete pod test-d4 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-d4 --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-d4 --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $$TOKEN" \
 			   -H "Content-Type: application/json" -d '{"data":"inject"}' \
 			   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
@@ -952,7 +952,7 @@ test-posture-ok:
 		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
 		RESULT=$$(kubectl delete pod test-posture-ok --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-posture-ok --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-posture-ok --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
 			   -H "X-Device-Firewall: enabled" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	fi; \
@@ -974,7 +974,7 @@ test-posture-block:
 		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
 		RESULT=$$(kubectl delete pod test-posture-block --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-posture-block --image=curlimages/curl --restart=Never --rm -i \
+			kubectl run test-posture-block --image=curlimages/curl --restart=Never -i \
 			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
 			   -H "X-Device-Firewall: disabled" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
 	fi; \
@@ -1062,7 +1062,7 @@ test-perf-baseline:
 # ============================================================
 ports: port-keycloak port-kiali port-grafana
 	@echo ""
-	@echo ">>> All port-forwards started"
+	@echo ">>> All port-forwards started (background)"
 	@echo "    Keycloak: http://localhost:8080"
 	@echo "    Kiali:    http://localhost:20001"
 	@echo "    Grafana:  http://localhost:3000"
@@ -1094,6 +1094,10 @@ port-grafana:
 	@nohup kubectl port-forward svc/grafana -n istio-system 3000:3000 >/dev/null 2>&1 &
 	@sleep 1
 	@echo "    Started: http://localhost:3000"
+
+ports-win:
+	@echo ">>> Starting port-forwards in separate Windows (PowerShell)..."
+	@powershell.exe -ExecutionPolicy Bypass -File scripts/ports.ps1
 
 ports-stop:
 	@echo ">>> Stopping all port-forwards..."
