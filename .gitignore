@@ -4,3 +4,6 @@ install files/
 .fronturl.tmp
 .claude-ignore
 .claude/
+__pycache__/
+*.pyc
+*.log
