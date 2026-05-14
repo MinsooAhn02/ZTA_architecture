@@ -61,7 +61,8 @@ TEST_SUMMARY_FILE := .test-summary.log
         test-perf test-perf-baseline test-perf-zta \
         ports ensure-ports port-keycloak port-kiali port-grafana ports-stop \
 	dashboard grafana logs logs-opa logs-frontend logs-backend logs-keycloak logs-pretty \
-        clean-all restart
+        clean-all restart \
+	visualizer
 
 # ============================================================
 #  Quick Start Commands
@@ -1154,3 +1155,11 @@ clean-all: clean
 restart:
 	@kubectl rollout restart deployment/frontend deployment/backend deployment/opa
 	@kubectl rollout status deployment/frontend deployment/backend deployment/opa --timeout=60s
+
+# ============================================================
+#  Visualizer (ZTA Security Dashboard)
+# ============================================================
+visualizer:
+	@echo ">>> Starting ZTA Security Dashboard on http://localhost:5001"
+	@echo "    (Ctrl+C to stop)"
+	@python3 visualizer/server.py
