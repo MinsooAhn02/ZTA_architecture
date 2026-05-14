@@ -98,10 +98,43 @@ def parse_opa_logs():
     return logs[-50:]
 
 
-# ── HTML template
-# Uses plain triple-quoted string (no f-string) so { } in CSS/JS are literal.
-# META data is injected via .replace("ZTA_META_JSON", ...) — no escaping needed.
-# ─────────────────────────────────────────────────────────────────────────────
+def parse_cluster():
+    out = {"pods": [], "policies": [], "error": None}
+    try:
+        r = subprocess.run(
+            ["kubectl", "get", "pods", "--no-headers"],
+            capture_output=True, text=True, timeout=8, cwd=str(BASE),
+        )
+        if r.returncode == 0:
+            for line in r.stdout.strip().splitlines():
+                parts = line.split()
+                if len(parts) >= 3:
+                    out["pods"].append({
+                        "name": parts[0], "ready": parts[1], "status": parts[2],
+                    })
+        else:
+            out["error"] = (r.stderr or "kubectl error").strip()
+    except Exception as e:
+        out["error"] = str(e)
+    try:
+        r2 = subprocess.run(
+            ["kubectl", "get",
+             "authorizationpolicy,peerauthentication,requestauthentication",
+             "-o", "json"],
+            capture_output=True, text=True, timeout=8, cwd=str(BASE),
+        )
+        if r2.returncode == 0:
+            data = json.loads(r2.stdout)
+            for item in data.get("items", []):
+                kind   = item.get("kind", "?")
+                name   = item.get("metadata", {}).get("name", "?")
+                action = item.get("spec", {}).get("action", "-")
+                out["policies"].append({"name": name, "kind": kind, "action": action})
+    except Exception:
+        pass
+    return out
+
+
 _HTML_TMPL = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -116,8 +149,6 @@ body {
   font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px;
   display: flex; flex-direction: column;
 }
-
-/* ── header ── */
 .hdr {
   flex-shrink: 0; background: #161b22; border-bottom: 1px solid #21262d;
   padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
@@ -138,19 +169,12 @@ body {
 .svc-kc { background: #1a1000; color: #e3b341; border-color: #d29922; }
 .svc-gf { background: #1a0e00; color: #f89040; border-color: #d26911; }
 .svc-ki { background: #0d1f38; color: #79c0ff; border-color: #388bfd; }
-
-/* ── warn ── */
 .warn { flex-shrink: 0; background: #2d1b00; border-bottom: 1px solid #d29922; padding: 6px 20px; font-size: 12px; color: #e3b341; }
-
-/* ── split ── */
 .split { flex: 1; display: flex; overflow: hidden; min-height: 0; }
-.left  { width: 340px; min-width: 240px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid #21262d; }
+.left  { width: 360px; min-width: 260px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid #21262d; }
 .right { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-/* ── tabs ── */
 .tabs {
-  flex-shrink: 0; display: flex; background: #161b22; border-bottom: 1px solid #21262d;
-  overflow-x: auto;
+  flex-shrink: 0; display: flex; background: #161b22; border-bottom: 1px solid #21262d; overflow-x: auto;
 }
 .tabs::-webkit-scrollbar { height: 2px; }
 .tabs::-webkit-scrollbar-thumb { background: #30363d; }
@@ -161,77 +185,90 @@ body {
 }
 .tab:hover { color: #e6edf3; background: #0d1117; }
 .tab.active { color: #f0f6fc; border-bottom-color: #388bfd; }
-.tab .cnt {
-  background: #21262d; color: #6e7681; font-size: 10px;
-  padding: 1px 5px; border-radius: 6px; margin-left: 3px;
-}
+.tab .cnt { background: #21262d; color: #6e7681; font-size: 10px; padding: 1px 5px; border-radius: 6px; margin-left: 3px; }
 .tab.active .cnt { background: #1f3a6e; color: #79c0ff; }
-
-/* ── cards ── */
-.cards { flex: 1; overflow-y: auto; padding: 10px; }
+.cards { flex: 1; overflow-y: auto; padding: 10px 8px; }
 .cards::-webkit-scrollbar { width: 4px; }
 .cards::-webkit-scrollbar-thumb { background: #21262d; border-radius: 2px; }
-
 .tc {
-  background: #161b22; border: 1px solid #21262d; border-radius: 6px;
-  padding: 11px 12px; cursor: pointer; margin-bottom: 8px;
-  transition: border-color .15s, background .15s;
+  background: #161b22; border: 1px solid #21262d; border-radius: 8px;
+  padding: 13px 14px; cursor: pointer; margin-bottom: 7px;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+  position: relative;
 }
-.tc:hover  { border-color: #388bfd; background: #0d1f38; }
-.tc.sel    { border-color: #388bfd; background: #0d1f38; box-shadow: inset 0 0 0 1px #388bfd44; }
+.tc:hover  { border-color: #388bfd; background: #0d1f38; box-shadow: 0 2px 8px rgba(56,139,253,.12); }
+.tc.sel    { border-color: #388bfd; background: #0d1f38; box-shadow: 0 0 0 2px #388bfd33, 0 2px 8px rgba(56,139,253,.15); }
 .tc.run    { border-color: #d29922; background: #130f00; }
-
-.tc .tid   { font-size: 10px; font-weight: 700; font-family: monospace; color: #484f58; margin-bottom: 3px; }
-.tc .ttitle { font-size: 12px; font-weight: 600; color: #e6edf3; margin-bottom: 4px; }
-.tc .tdesc  { font-size: 11px; color: #8b949e; line-height: 1.4; margin-bottom: 8px; }
+.tc .tid   { font-size: 11px; font-weight: 800; font-family: monospace; color: #388bfd; margin-bottom: 4px; letter-spacing: .3px; }
+.tc .ttitle { font-size: 13px; font-weight: 600; color: #f0f6fc; margin-bottom: 5px; line-height: 1.3; }
+.tc .tdesc  { font-size: 11.5px; color: #8b949e; line-height: 1.45; margin-bottom: 10px; }
 .tc-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.codes  { font-size: 10px; font-family: monospace; color: #484f58; }
-
-.badge { padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 700; border: 1px solid; }
+.codes  { font-size: 11px; font-family: monospace; color: #6e7681; }
+.badge { padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; border: 1px solid; }
 .b-pass    { background: #1c4025; color: #3fb950; border-color: #238636; }
 .b-fail    { background: #3d1b1b; color: #f85149; border-color: #da3633; }
 .b-run     { background: #1a1000; color: #e3b341; border-color: #d29922; }
 .b-unknown { background: #21262d; color: #6e7681; border-color: #30363d; }
-
-.blk {
-  display: inline-block; margin-top: 5px; font-size: 10px; padding: 1px 6px;
-  border-radius: 3px; border: 1px solid; font-family: monospace;
-}
+.blk { display: inline-block; margin-top: 6px; font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid; font-family: monospace; font-weight: 600; }
 .blk-allow  { background: #0d2010; color: #3fb950; border-color: #238636; }
 .blk-opa    { background: #0d1f30; color: #56b6c2; border-color: #00b4d8; }
 .blk-istio  { background: #1a0f28; color: #a371f7; border-color: #6e40c9; }
 .blk-fail   { background: #3d1b1b; color: #f85149; border-color: #da3633; }
-.no-cards   { padding: 24px; text-align: center; color: #484f58; font-style: italic; font-size: 12px; }
+.no-cards   { padding: 24px; text-align: center; color: #484f58; font-style: italic; font-size: 13px; }
 
-/* ── pipeline ── */
-.pipe-wrap  { flex-shrink: 0; padding: 14px 18px; border-bottom: 1px solid #21262d; }
-.pipe-hdr   { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.pipe-hdr h2 { font-size: 10px; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .7px; }
-.pipe-dir    { font-size: 11px; color: #388bfd; font-weight: 500; }
-
-.pl-row { display: flex; align-items: center; overflow-x: auto; padding: 2px 0; }
-.pl-row::-webkit-scrollbar { height: 3px; }
-.pl-row::-webkit-scrollbar-thumb { background: #30363d; }
-
-.pln {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; min-width: 96px; padding: 12px 8px;
-  border: 2px solid #30363d; border-radius: 8px; background: #0d1117;
-  flex-shrink: 0; transition: border-color .22s, background .22s, opacity .22s;
+/* ── right panel tabs ── */
+.r-tabs {
+  flex-shrink: 0; display: flex; background: #161b22;
+  border-bottom: 1px solid #21262d;
 }
-.pln .ni  { font-size: 22px; line-height: 1; }
-.pln .nl  { font-size: 11px; font-weight: 700; color: #6e7681; text-align: center; transition: color .22s; }
-.pln .ns  { font-size: 9px;  color: #484f58; text-align: center; line-height: 1.3; }
-.pl-arr   { padding: 0 6px; font-size: 18px; color: #30363d; flex-shrink: 0; transition: color .22s; user-select: none; }
+.r-tab {
+  padding: 8px 16px; font-size: 12px; font-weight: 600; color: #6e7681;
+  cursor: pointer; border-bottom: 2px solid transparent; user-select: none;
+  transition: color .15s;
+}
+.r-tab:hover { color: #e6edf3; }
+.r-tab.active { color: #f0f6fc; border-bottom-color: #388bfd; }
+.r-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.r-panel.hidden { display: none !important; }
 
-.pln.inactive   { opacity: .22; }
-.pln.active     { border-color: #388bfd; background: #0b1c36; } .pln.active .nl { color: #79c0ff; }
-.pln.passed     { border-color: #238636; background: #0a1f12; } .pln.passed .nl { color: #3fb950; }
-.pln.allowed    { border-color: #238636; background: #0a1f12; } .pln.allowed .nl { color: #3fb950; }
-.pln.blocked    { border-color: #da3633; background: #2a0c0c; animation: rpulse .9s ease 4; } .pln.blocked .nl { color: #f85149; }
-.pln.unreachable { opacity: .1; }
-.pl-arr.ok      { color: #238636; }
-.pl-arr.blocked { color: #21262d; }
+/* ── SVG topology ── */
+.topo-scroll { flex: 1; overflow: auto; display: flex; flex-direction: column; padding: 12px 16px; gap: 10px; }
+.topo-hint { font-size: 12px; color: #484f58; font-style: italic; text-align: center; padding: 6px 0; }
+.topo-svg { width: 100%; height: auto; display: block; }
+.topo-section-lbl { font-size: 10px; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px; }
+
+.topo-node rect {
+  fill: #0d1117; stroke: #30363d; stroke-width: 2;
+  transition: fill .25s, stroke .25s, opacity .25s;
+}
+.topo-node text { font-family: 'Segoe UI', system-ui, sans-serif; transition: fill .25s, opacity .25s; }
+.n-label { font-size: 11px; font-weight: 700; fill: #6e7681; }
+.n-sub   { font-size: 9px;  fill: #484f58; }
+
+.topo-node.n-inactive rect { fill: #0d1117; stroke: #21262d; }
+.topo-node.n-inactive .n-label { fill: #484f58; }
+
+.topo-node.n-passed rect  { fill: #0a1f12; stroke: #238636; }
+.topo-node.n-passed .n-label { fill: #3fb950; }
+
+.topo-node.n-allowed rect { fill: #0a2a1a; stroke: #2ea043; }
+.topo-node.n-allowed .n-label { fill: #56d364; }
+
+.topo-node.n-blocked rect { fill: #2a0c0c; stroke: #da3633; animation: rpulse .9s ease 4; }
+.topo-node.n-blocked .n-label { fill: #f85149; }
+
+.topo-node.n-unreachable rect { opacity: .08; }
+.topo-node.n-unreachable text { opacity: .08; }
+
+.topo-kc rect  { fill: #1a1000 !important; stroke: #d29922 !important; }
+.topo-kc .n-label { fill: #e3b341 !important; }
+.topo-kc .n-sub   { fill: #7d5a00 !important; }
+
+.topo-edge { stroke: #30363d; stroke-width: 2; fill: none; transition: stroke .25s; }
+.topo-edge.e-ok      { stroke: #238636; }
+.topo-edge.e-blocked { stroke: #da3633; stroke-dasharray: 5,3; }
+.topo-kc-edge { stroke: #d29922; stroke-width: 1.5; stroke-dasharray: 4,3; fill: none; opacity: .7; }
+.e-label { fill: #484f58; font-size: 9px; font-family: monospace; }
 
 @keyframes rpulse {
   0%   { box-shadow: 0 0 0 0   rgba(218,54,51,.6); }
@@ -239,7 +276,17 @@ body {
   100% { box-shadow: 0 0 0 0   rgba(218,54,51,0); }
 }
 
-/* ── detail ── */
+/* legend */
+.legend { display: flex; gap: 14px; padding: 6px 2px; flex-wrap: wrap; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6e7681; }
+.leg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px solid; }
+.ld-inactive { background: #0d1117; border-color: #21262d; }
+.ld-passed   { background: #0a1f12; border-color: #238636; }
+.ld-blocked  { background: #2a0c0c; border-color: #da3633; }
+.ld-allowed  { background: #0a2a1a; border-color: #2ea043; }
+.ld-dim      { background: #0d1117; border-color: #21262d; opacity: .3; }
+
+/* ── detail panel ── */
 .detail { flex: 1; overflow-y: auto; padding: 14px 18px; }
 .detail::-webkit-scrollbar { width: 4px; }
 .detail::-webkit-scrollbar-thumb { background: #21262d; border-radius: 2px; }
@@ -255,67 +302,11 @@ body {
 .t-ok { background: #0d2010; border-color: #238636; color: #3fb950; }
 .t-ng { background: #2d0c0c; border-color: #da3633; color: #f85149; }
 .t-sa { background: #1a0f00; border-color: #d29922; color: #e3b341; }
-.verdict {
-  font-size: 12px; font-family: monospace; padding: 10px 12px; border-radius: 5px;
-  line-height: 1.5; margin-bottom: 6px; word-break: break-word;
-}
+.verdict { font-size: 12px; font-family: monospace; padding: 10px 12px; border-radius: 5px; line-height: 1.5; margin-bottom: 6px; word-break: break-word; }
 .v-deny  { background: #2a0c0c; border-left: 3px solid #da3633; color: #ffa198; }
 .v-allow { background: #0a1f12; border-left: 3px solid #238636; color: #7ee787; }
 .d-layer { font-size: 11px; color: #6e7681; margin-top: 4px; }
 .d-make  { font-size: 11px; color: #484f58; margin-top: 10px; }
-
-/* ── terminal ── */
-.term-wrap {
-  flex-shrink: 0; border-top: 1px solid #21262d;
-  display: flex; flex-direction: column; height: 200px;
-}
-.term-bar {
-  flex-shrink: 0; display: flex; align-items: center; gap: 8px;
-  padding: 6px 14px; background: #161b22; border-bottom: 1px solid #21262d;
-}
-.dots span {
-  display: inline-block; width: 9px; height: 9px;
-  border-radius: 50%; margin-right: 2px;
-}
-.d-r { background: #f85149; } .d-y { background: #e3b341; } .d-g { background: #3fb950; }
-.term-ttl { font-size: 11px; color: #6e7681; font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rbadge { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 9px; border: 1px solid; }
-.rb-idle { background: #21262d; color: #6e7681; border-color: #30363d; }
-.rb-run  { background: #1a1000; color: #e3b341; border-color: #d29922; animation: blink .9s infinite; }
-.rb-ok   { background: #1c4025; color: #3fb950; border-color: #238636; }
-.rb-ng   { background: #3d1b1b; color: #f85149; border-color: #da3633; }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-.term-body { flex: 1; overflow-y: auto; padding: 8px 14px; font-family: monospace; font-size: 12px; line-height: 1.6; }
-.term-body::-webkit-scrollbar { width: 4px; }
-.term-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
-.tl { display: block; white-space: pre-wrap; word-break: break-all; }
-.c-pass { color: #3fb950; font-weight: 700; } .c-fail { color: #f85149; font-weight: 700; }
-.c-hdr  { color: #f0f6fc; font-weight: 700; } .c-sep  { color: #30363d; }
-.c-exp  { color: #79c0ff; } .c-res  { color: #e3b341; } .c-note { color: #d29922; }
-.c-ok   { color: #3fb950; border-top: 1px solid #238636; margin-top: 5px; padding-top: 4px; }
-.c-ng   { color: #f85149; border-top: 1px solid #da3633; margin-top: 5px; padding-top: 4px; }
-.c-err  { color: #f85149; } .c-idle { color: #484f58; font-style: italic; }
-
-/* ── bottom bar ── */
-.bot {
-  flex-shrink: 0; background: #161b22; border-top: 1px solid #21262d;
-  padding: 7px 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-}
-.bot-lbl { font-size: 10px; color: #484f58; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
-.bot-sep { color: #30363d; }
-.bb {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer;
-  border: 1px solid #30363d; border-radius: 5px; background: #0d1117; color: #8b949e;
-  transition: all .15s; white-space: nowrap;
-}
-.bb:hover  { border-color: #388bfd; color: #79c0ff; background: #0b1c36; }
-.bb.bb-run { border-color: #d29922; color: #e3b341; background: #130f00; }
-.bb.bb-ok  { border-color: #238636; color: #3fb950; background: #0a1f12; }
-.bb.bb-ng  { border-color: #da3633; color: #f85149; background: #2a0c0c; }
-.bot-ts { font-size: 10px; color: #484f58; margin-left: auto; }
-
-/* ── journey steps ── */
 .journey { margin: 0 0 12px; }
 .jstep { display: flex; align-items: flex-start; margin-left: 8px; padding: 5px 0 5px 16px; border-left: 2px solid #21262d; position: relative; }
 .jstep:last-child { border-left-color: transparent; }
@@ -337,15 +328,61 @@ body {
 .jb-block { background: #2a0c0c; color: #f85149;  border-color: #da3633; }
 .jb-skip  { background: transparent; color: #30363d; border-color: #21262d; }
 .j-reason { font-size: 10.5px; color: #ffa198; font-family: monospace; margin-top: 5px; padding: 5px 8px; background: #1e0e0e; border-radius: 4px; border-left: 2px solid #da3633; line-height: 1.5; word-break: break-word; }
-/* ── security insight ── */
 .d-why { font-size: 12px; color: #c9d1d9; line-height: 1.65; margin-bottom: 12px; padding: 9px 11px; background: #0d1f38; border-radius: 5px; border-left: 3px solid #388bfd; }
 
+/* ── report panel ── */
+.report-wrap { flex: 1; overflow: auto; padding: 14px 18px; }
+.report-wrap::-webkit-scrollbar { width: 4px; }
+.report-wrap::-webkit-scrollbar-thumb { background: #21262d; border-radius: 2px; }
+.report-hdr { font-size: 11px; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+.report-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.report-tbl th { padding: 6px 10px; text-align: left; font-size: 10px; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid #21262d; white-space: nowrap; }
+.report-tbl td { padding: 7px 10px; border-bottom: 1px solid #161b22; vertical-align: middle; }
+.report-tbl tr:hover td { background: #161b22; }
+.rr-pass td { background: #050d07; }
+.rr-fail td { background: #100404; }
+.r-id    { font-family: monospace; font-size: 11px; font-weight: 700; color: #79c0ff; white-space: nowrap; }
+.r-layer { font-size: 11px; color: #8b949e; }
+.r-code  { font-family: monospace; font-size: 11px; color: #6e7681; text-align: center; }
+
+/* ── terminal ── */
+.term-wrap { flex-shrink: 0; border-top: 1px solid #21262d; display: flex; flex-direction: column; height: 280px; }
+.term-bar  { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 7px 16px; background: #161b22; border-bottom: 1px solid #21262d; }
+.dots span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 3px; }
+.d-r { background: #f85149; } .d-y { background: #e3b341; } .d-g { background: #3fb950; }
+.term-ttl { font-size: 12px; color: #6e7681; font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rbadge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 9px; border: 1px solid; }
+.rb-idle { background: #21262d; color: #6e7681; border-color: #30363d; }
+.rb-run  { background: #1a1000; color: #e3b341; border-color: #d29922; animation: blink .9s infinite; }
+.rb-ok   { background: #1c4025; color: #3fb950; border-color: #238636; }
+.rb-ng   { background: #3d1b1b; color: #f85149; border-color: #da3633; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+.term-body { flex: 1; overflow-y: auto; padding: 10px 16px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; line-height: 1.7; }
+.term-body::-webkit-scrollbar { width: 4px; }
+.term-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+.tl { display: block; white-space: pre-wrap; word-break: break-all; }
+.c-pass { color: #3fb950; font-weight: 700; } .c-fail { color: #f85149; font-weight: 700; }
+.c-hdr  { color: #f0f6fc; font-weight: 700; } .c-sep  { color: #30363d; }
+.c-exp  { color: #79c0ff; } .c-res  { color: #e3b341; } .c-note { color: #d29922; }
+.c-ok   { color: #3fb950; border-top: 1px solid #238636; margin-top: 5px; padding-top: 4px; }
+.c-ng   { color: #f85149; border-top: 1px solid #da3633; margin-top: 5px; padding-top: 4px; }
+.c-err  { color: #f85149; } .c-idle { color: #484f58; font-style: italic; }
+
+/* ── bottom bar ── */
+.bot { flex-shrink: 0; background: #161b22; border-top: 1px solid #21262d; padding: 7px 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bot-lbl { font-size: 10px; color: #484f58; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+.bot-sep { color: #30363d; }
+.bb { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid #30363d; border-radius: 5px; background: #0d1117; color: #8b949e; transition: all .15s; white-space: nowrap; }
+.bb:hover  { border-color: #388bfd; color: #79c0ff; background: #0b1c36; }
+.bb.bb-run { border-color: #d29922; color: #e3b341; background: #130f00; }
+.bb.bb-ok  { border-color: #238636; color: #3fb950; background: #0a1f12; }
+.bb.bb-ng  { border-color: #da3633; color: #f85149; background: #2a0c0c; }
+.bot-ts { font-size: 10px; color: #484f58; margin-left: auto; }
 .hidden { display: none !important; }
 </style>
 </head>
 <body>
 
-<!-- header -->
 <div class="hdr">
   <div class="hdr-title">
     <h1>&#x2B21; ZTA Security Dashboard</h1>
@@ -363,84 +400,186 @@ body {
   </div>
 </div>
 
-<!-- warning -->
 <div class="warn hidden" id="warn">
-  &#x26A0; Server offline or make not found &mdash; Animation works, but run from WSL for live make output:
-  <code>python3 visualizer/server.py</code> then open <code>http://localhost:5001</code>
+  &#x26A0; Server offline &mdash; run from WSL: <code>python3 visualizer/server.py</code>
 </div>
 
-<!-- main split -->
 <div class="split">
 
   <!-- LEFT: scenario cards -->
   <div class="left">
     <div class="tabs" id="tabs">
       <div class="tab active" data-f="all">All <span class="cnt" id="cnt-all">18</span></div>
-      <div class="tab" data-f="A">A-Lateral <span class="cnt" id="cnt-A">5</span></div>
-      <div class="tab" data-f="B">B-JWT <span class="cnt" id="cnt-B">3</span></div>
-      <div class="tab" data-f="C">C-Context <span class="cnt" id="cnt-C">4</span></div>
-      <div class="tab" data-f="D">D-Claim <span class="cnt" id="cnt-D">4</span></div>
-      <div class="tab" data-f="E">E-Posture <span class="cnt" id="cnt-E">2</span></div>
+      <div class="tab" data-f="A">A-Lateral <span class="cnt">5</span></div>
+      <div class="tab" data-f="B">B-JWT <span class="cnt">3</span></div>
+      <div class="tab" data-f="C">C-Context <span class="cnt">4</span></div>
+      <div class="tab" data-f="D">D-Claim <span class="cnt">4</span></div>
+      <div class="tab" data-f="E">E-Posture <span class="cnt">2</span></div>
     </div>
     <div class="cards" id="cards">
-      <div class="no-cards">Loading metadata&hellip;</div>
+      <div class="no-cards">Loading&hellip;</div>
     </div>
   </div>
 
-  <!-- RIGHT: pipeline + detail -->
+  <!-- RIGHT: tabbed panel -->
   <div class="right">
+    <div class="r-tabs">
+      <div class="r-tab active" id="rtab-graph"  onclick="switchRTab('graph')">&#x25A6; Graph</div>
+      <div class="r-tab"        id="rtab-detail" onclick="switchRTab('detail')">Detail</div>
+      <div class="r-tab"        id="rtab-report" onclick="switchRTab('report')">Report</div>
+    </div>
 
-    <div class="pipe-wrap">
-      <div class="pipe-hdr">
-        <h2>ZTA Security Pipeline</h2>
-        <span class="pipe-dir hidden" id="pl-dir"></span>
+    <!-- Graph panel -->
+    <div id="panel-graph" class="r-panel">
+      <div class="topo-scroll">
+        <div id="topo-hint" class="topo-hint">&#x2190; Click a scenario card to animate the ZTA traffic flow</div>
+
+        <!-- North-South topology -->
+        <div id="wrap-ns">
+          <div class="topo-section-lbl">North-South &mdash; Client to Application</div>
+          <svg id="svg-ns" class="topo-svg" viewBox="0 0 760 195" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <marker id="arh"    markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#30363d"/></marker>
+              <marker id="arh-ok" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#238636"/></marker>
+              <marker id="arh-ng" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#da3633"/></marker>
+            </defs>
+
+            <!-- Keycloak side node -->
+            <g id="node-keycloak" class="topo-node topo-kc">
+              <rect x="155" y="10" width="130" height="40" rx="5"/>
+              <text x="220" y="27" text-anchor="middle" class="n-label">Keycloak</text>
+              <text x="220" y="42" text-anchor="middle" class="n-sub">JWT issuer (JWKS)</text>
+            </g>
+            <!-- JWKS edge -->
+            <line x1="220" y1="50" x2="220" y2="98" class="topo-kc-edge"/>
+            <text x="226" y="78" class="e-label">JWKS</text>
+
+            <!-- Main flow edges -->
+            <line id="edge-istio-jwt"  x1="106" y1="128" x2="155" y2="128" class="topo-edge" marker-end="url(#arh)"/>
+            <line id="edge-istio-deny" x1="290" y1="128" x2="330" y2="128" class="topo-edge" marker-end="url(#arh)"/>
+            <line id="edge-opa"        x1="465" y1="128" x2="500" y2="128" class="topo-edge" marker-end="url(#arh)"/>
+            <line id="edge-app"        x1="620" y1="128" x2="650" y2="128" class="topo-edge" marker-end="url(#arh)"/>
+
+            <!-- Client -->
+            <g id="node-client" class="topo-node n-inactive">
+              <rect x="6" y="103" width="100" height="50" rx="6"/>
+              <text x="56" y="125" text-anchor="middle" class="n-label">Client</text>
+              <text x="56" y="141" text-anchor="middle" class="n-sub">Attacker</text>
+            </g>
+
+            <!-- Istio JWT Auth -->
+            <g id="node-istio-jwt" class="topo-node n-inactive">
+              <rect x="155" y="98" width="135" height="60" rx="6"/>
+              <text x="222" y="120" text-anchor="middle" class="n-label">Istio JWT Auth</text>
+              <text x="222" y="135" text-anchor="middle" class="n-sub">JWKS verify</text>
+              <text x="222" y="150" text-anchor="middle" class="n-sub">RSA signature</text>
+            </g>
+
+            <!-- Istio DENY -->
+            <g id="node-istio-deny" class="topo-node n-inactive">
+              <rect x="330" y="98" width="135" height="60" rx="6"/>
+              <text x="397" y="120" text-anchor="middle" class="n-label">Istio DENY</text>
+              <text x="397" y="135" text-anchor="middle" class="n-sub">require-jwt</text>
+              <text x="397" y="150" text-anchor="middle" class="n-sub">principal check</text>
+            </g>
+
+            <!-- OPA -->
+            <g id="node-opa" class="topo-node n-inactive">
+              <rect x="500" y="98" width="120" height="60" rx="6"/>
+              <text x="560" y="120" text-anchor="middle" class="n-label">OPA Policy</text>
+              <text x="560" y="135" text-anchor="middle" class="n-sub">Rego eval</text>
+              <text x="560" y="150" text-anchor="middle" class="n-sub">role/path/posture</text>
+            </g>
+
+            <!-- App -->
+            <g id="node-app" class="topo-node n-inactive">
+              <rect x="650" y="103" width="104" height="50" rx="6"/>
+              <text x="702" y="125" text-anchor="middle" class="n-label">App</text>
+              <text x="702" y="141" text-anchor="middle" class="n-sub">Frontend svc</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- East-West topology -->
+        <div id="wrap-ew" class="hidden">
+          <div class="topo-section-lbl">East-West &mdash; Lateral Movement Defense</div>
+          <svg id="svg-ew" class="topo-svg" viewBox="0 0 700 135" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <marker id="arh-ew"    markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#30363d"/></marker>
+              <marker id="arh-ok-ew" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#238636"/></marker>
+              <marker id="arh-ng-ew" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#da3633"/></marker>
+            </defs>
+            <!-- Edges -->
+            <line id="edge-mtls"    x1="116" y1="67" x2="158" y2="67" class="topo-edge" marker-end="url(#arh-ew)"/>
+            <line id="edge-spiffe"  x1="278" y1="67" x2="325" y2="67" class="topo-edge" marker-end="url(#arh-ew)"/>
+            <line id="edge-backend" x1="455" y1="67" x2="495" y2="67" class="topo-edge" marker-end="url(#arh-ew)"/>
+
+            <!-- Rogue Pod -->
+            <g id="node-rogue-pod" class="topo-node n-inactive">
+              <rect x="6" y="42" width="110" height="50" rx="6"/>
+              <text x="61" y="64" text-anchor="middle" class="n-label">Rogue Pod</text>
+              <text x="61" y="80" text-anchor="middle" class="n-sub">no sidecar / bad SA</text>
+            </g>
+
+            <!-- mTLS -->
+            <g id="node-mtls" class="topo-node n-inactive">
+              <rect x="158" y="42" width="120" height="50" rx="6"/>
+              <text x="218" y="64" text-anchor="middle" class="n-label">mTLS STRICT</text>
+              <text x="218" y="80" text-anchor="middle" class="n-sub">cert handshake</text>
+            </g>
+
+            <!-- SPIFFE -->
+            <g id="node-spiffe" class="topo-node n-inactive">
+              <rect x="325" y="42" width="130" height="50" rx="6"/>
+              <text x="390" y="64" text-anchor="middle" class="n-label">SPIFFE Allowlist</text>
+              <text x="390" y="80" text-anchor="middle" class="n-sub">SA identity check</text>
+            </g>
+
+            <!-- Backend -->
+            <g id="node-backend" class="topo-node n-inactive">
+              <rect x="495" y="42" width="110" height="50" rx="6"/>
+              <text x="550" y="64" text-anchor="middle" class="n-label">Backend</text>
+              <text x="550" y="80" text-anchor="middle" class="n-sub">internal svc</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+          <div class="leg-item"><span class="leg-dot ld-inactive"></span>Inactive</div>
+          <div class="leg-item"><span class="leg-dot ld-passed"></span>Passed</div>
+          <div class="leg-item"><span class="leg-dot ld-blocked"></span>Blocked</div>
+          <div class="leg-item"><span class="leg-dot ld-allowed"></span>Allowed</div>
+          <div class="leg-item"><span class="leg-dot ld-dim"></span>Unreachable</div>
+        </div>
       </div>
+    </div><!-- /panel-graph -->
 
-      <!-- North-South pipeline -->
-      <div class="pl-row" id="pl-ns">
-        <div class="pln inactive" id="node-client">
-          <div class="ni">&#x1F4BB;</div><div class="nl">Client</div><div class="ns">Attacker</div>
-        </div>
-        <div class="pl-arr" id="arr-ns-1">&#x2192;</div>
-        <div class="pln inactive" id="node-istio-jwt">
-          <div class="ni">&#x1F511;</div><div class="nl">Istio JWT</div><div class="ns">JWKS verify</div>
-        </div>
-        <div class="pl-arr" id="arr-ns-2">&#x2192;</div>
-        <div class="pln inactive" id="node-istio-deny">
-          <div class="ni">&#x1F6E1;</div><div class="nl">Istio DENY</div><div class="ns">require-jwt</div>
-        </div>
-        <div class="pl-arr" id="arr-ns-3">&#x2192;</div>
-        <div class="pln inactive" id="node-opa">
-          <div class="ni">&#x2696;</div><div class="nl">OPA Policy</div><div class="ns">Rego eval</div>
-        </div>
-        <div class="pl-arr" id="arr-ns-4">&#x2192;</div>
-        <div class="pln inactive" id="node-app">
-          <div class="ni">&#x1F5A5;</div><div class="nl">App</div><div class="ns">Flask svc</div>
-        </div>
-      </div>
-
-      <!-- East-West pipeline -->
-      <div class="pl-row hidden" id="pl-ew">
-        <div class="pln inactive" id="node-rogue-pod">
-          <div class="ni">&#x2620;</div><div class="nl">Rogue Pod</div><div class="ns">compromised</div>
-        </div>
-        <div class="pl-arr" id="arr-ew-1">&#x2192;</div>
-        <div class="pln inactive" id="node-mtls">
-          <div class="ni">&#x1F510;</div><div class="nl">mTLS</div><div class="ns">STRICT cert</div>
-        </div>
-        <div class="pl-arr" id="arr-ew-2">&#x2192;</div>
-        <div class="pln inactive" id="node-spiffe">
-          <div class="ni">&#x1FAAA;</div><div class="nl">SPIFFE</div><div class="ns">SA allowlist</div>
-        </div>
-        <div class="pl-arr" id="arr-ew-3">&#x2192;</div>
-        <div class="pln inactive" id="node-backend">
-          <div class="ni">&#x1F5A5;</div><div class="nl">Backend</div><div class="ns">internal svc</div>
-        </div>
+    <!-- Detail panel -->
+    <div id="panel-detail" class="r-panel hidden">
+      <div class="detail" id="detail">
+        <div class="d-empty">&#x2190; Click a scenario card to see attack details</div>
       </div>
     </div>
 
-    <div class="detail" id="detail">
-      <div class="d-empty">&#x2190; Click a scenario card to see attack details and defense decision</div>
+    <!-- Report panel -->
+    <div id="panel-report" class="r-panel hidden">
+      <div class="report-wrap">
+        <div class="report-hdr">Test Results Summary</div>
+        <table class="report-tbl">
+          <thead>
+            <tr>
+              <th>ID</th><th>Title</th><th>Defense Layer</th>
+              <th style="text-align:center">Expect</th>
+              <th style="text-align:center">Result</th>
+              <th style="text-align:center">Status</th>
+            </tr>
+          </thead>
+          <tbody id="report-body">
+            <tr><td colspan="6" style="text-align:center;color:#484f58;padding:20px">Run make test-all to populate</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
   </div><!-- /right -->
@@ -461,54 +600,55 @@ body {
 <!-- bottom bar -->
 <div class="bot">
   <span class="bot-lbl">Workflow</span>
-  <div class="bb" id="bb-all"         onclick="runW('all')">&#x2B21; all</div>
-  <div class="bb" id="bb-step1"       onclick="runW('step1')">&#x1F3D7; step1</div>
-  <div class="bb" id="bb-step2"       onclick="runW('step2')">&#x1F680; step2</div>
-  <div class="bb" id="bb-step3"       onclick="runW('step3')">&#x1F6E1; step3</div>
-  <div class="bb" id="bb-step4"       onclick="runW('step4')">&#x1F510; step4</div>
-  <div class="bb" id="bb-test-all"    onclick="runW('test-all')">&#x1F9EA; test-all</div>
+  <div class="bb" id="bb-all"          onclick="runW('all')">&#x2B21; all</div>
+  <div class="bb" id="bb-step1"        onclick="runW('step1')">step1</div>
+  <div class="bb" id="bb-step2"        onclick="runW('step2')">step2</div>
+  <div class="bb" id="bb-step3"        onclick="runW('step3')">step3</div>
+  <div class="bb" id="bb-step4"        onclick="runW('step4')">step4</div>
+  <div class="bb" id="bb-test-all"     onclick="runW('test-all')">&#x1F9EA; test-all</div>
   <span class="bot-sep">|</span>
-  <div class="bb" id="bb-ports"        onclick="runW('ports')">&#x1F50C; ports</div>
-  <div class="bb" id="bb-status"       onclick="runW('status')">&#x1F4CB; status</div>
-  <div class="bb" id="bb-jwt-refresh"  onclick="runW('jwt-refresh')">&#x1F504; jwt-refresh</div>
-  <div class="bb" id="bb-logs-pretty"  onclick="runW('logs-pretty')">&#x1F4DC; opa-logs</div>
-  <div class="bb" id="bb-setup-viewer" onclick="runW('setup-viewer')">&#x1F465; add-viewer</div>
+  <div class="bb" id="bb-ports"        onclick="runW('ports')">ports</div>
+  <div class="bb" id="bb-status"       onclick="runW('status')">status</div>
+  <div class="bb" id="bb-jwt-refresh"  onclick="runW('jwt-refresh')">jwt-refresh</div>
+  <div class="bb" id="bb-logs-pretty"  onclick="runW('logs-pretty')">opa-logs</div>
+  <div class="bb" id="bb-setup-viewer" onclick="runW('setup-viewer')">add-viewer</div>
+  <span class="bot-sep">|</span>
+  <div class="bb" id="bb-cluster"      onclick="fetchCluster()">&#x1F5A7; cluster</div>
+  <div class="bb" id="bb-report"       onclick="switchRTab('report')">&#x1F4CA; report</div>
   <span class="bot-ts" id="bot-ts"></span>
 </div>
 
-<!-- metadata — plain JSON, read by JS below (no escaping issues) -->
 <script type="application/json" id="zta-meta">ZTA_META_JSON</script>
 
 <script>
-// ── init META from JSON script tag ────────────────────────────────────────
 var META = {};
 (function() {
-  try {
-    META = JSON.parse(document.getElementById('zta-meta').textContent);
-  } catch(e) {
-    console.error('ZTA: failed to parse META:', e);
-  }
+  try { META = JSON.parse(document.getElementById('zta-meta').textContent); }
+  catch(e) { console.error('ZTA META parse error', e); }
 })();
 
-// ── constants ─────────────────────────────────────────────────────────────
-var ARROW = {
-  'istio-jwt':'arr-ns-1', 'istio-deny':'arr-ns-2',
-  'opa':'arr-ns-3',       'app':'arr-ns-4',
-  'mtls':'arr-ew-1',      'spiffe':'arr-ew-2', 'backend':'arr-ew-3'
-};
 var NODE_NAMES = {
   'client':     'Client',
   'istio-jwt':  'Istio JWT Auth (JWKS verify)',
   'istio-deny': 'Istio DENY Policy (require-jwt)',
   'opa':        'OPA Policy Engine (Rego eval)',
-  'app':        'Application Backend',
+  'app':        'Application (Flask)',
   'rogue-pod':  'Rogue Pod (compromised)',
   'mtls':       'mTLS STRICT (cert check)',
   'spiffe':     'SPIFFE Allowlist (SA check)',
-  'backend':    'Backend Service'
+  'backend':    'Backend Service',
 };
 
-// ── state ─────────────────────────────────────────────────────────────────
+var EDGE_IDS = {
+  'istio-jwt':  'edge-istio-jwt',
+  'istio-deny': 'edge-istio-deny',
+  'opa':        'edge-opa',
+  'app':        'edge-app',
+  'mtls':       'edge-mtls',
+  'spiffe':     'edge-spiffe',
+  'backend':    'edge-backend',
+};
+
 var results  = {};
 var filter   = 'all';
 var selId    = null;
@@ -516,11 +656,17 @@ var animBusy = false;
 var sse      = null;
 var running  = null;
 
-// ── helpers ───────────────────────────────────────────────────────────────
 function g(id) { return document.getElementById(id); }
-function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-// ── render stats ─────────────────────────────────────────────────────────
+function switchRTab(name) {
+  ['graph','detail','report'].forEach(function(n) {
+    var tab   = g('rtab-'  + n);
+    var panel = g('panel-' + n);
+    if (tab)   tab.classList.toggle('active', n === name);
+    if (panel) panel.classList.toggle('hidden', n !== name);
+  });
+}
+
 function renderStats() {
   var ids  = Object.keys(META);
   var pass = ids.filter(function(id) { return results[id] && results[id].status === 'PASS'; }).length;
@@ -530,60 +676,34 @@ function renderStats() {
   g('s-fail').textContent  = fail;
 }
 
-// ── render cards ──────────────────────────────────────────────────────────
 function renderCards() {
   var ids = Object.keys(META);
-  if (filter !== 'all') {
-    ids = ids.filter(function(id) { return id.indexOf(filter + '-') === 0; });
-  }
-
-  if (!ids.length) {
-    g('cards').innerHTML = '<div class="no-cards">No scenarios</div>';
-    return;
-  }
-
+  if (filter !== 'all') ids = ids.filter(function(id) { return id.indexOf(filter + '-') === 0; });
+  if (!ids.length) { g('cards').innerHTML = '<div class="no-cards">No scenarios</div>'; return; }
   var html = '';
   for (var i = 0; i < ids.length; i++) {
-    var id  = ids[i];
-    var m   = META[id];
-    var r   = results[id];
-    var rid = (running === id);
-
+    var id  = ids[i], m = META[id], r = results[id], rid = (running === id);
     var badgeCls, badgeTxt;
-    if      (rid)                    { badgeCls = 'b-run';     badgeTxt = '&#x25B6; ...'; }
-    else if (!r)                     { badgeCls = 'b-unknown'; badgeTxt = '&mdash;'; }
-    else if (r.status === 'PASS')    { badgeCls = 'b-pass';    badgeTxt = 'PASS'; }
-    else                             { badgeCls = 'b-fail';    badgeTxt = 'FAIL'; }
-
+    if      (rid)                 { badgeCls='b-run';     badgeTxt='&#x25B6; ...'; }
+    else if (!r)                  { badgeCls='b-unknown'; badgeTxt='&mdash;'; }
+    else if (r.status === 'PASS') { badgeCls='b-pass';    badgeTxt='PASS'; }
+    else                          { badgeCls='b-fail';    badgeTxt='FAIL'; }
     var blk;
-    if (!rid && r && r.status === 'FAIL')
-      blk = '<span class="blk blk-fail">&#x2717; FAIL</span>';
-    else if (!m.block_at)
-      blk = '<span class="blk blk-allow">&#x2713; ALLOW</span>';
-    else if (m.block_at === 'opa')
-      blk = '<span class="blk blk-opa">&#x2717; OPA</span>';
-    else
-      blk = '<span class="blk blk-istio">&#x2717; Istio</span>';
-
-    var selCls = (selId === id) ? ' sel' : '';
-    var runCls = rid ? ' run' : '';
-    var codes  = r ? (r.expect + ' &rarr; ' + r.result) : (m.signals.method + ' ' + m.signals.path);
-
-    html += '<div class="tc' + selCls + runCls + '" data-id="' + id + '" onclick="pick(this.dataset.id)">' +
+    if (!rid && r && r.status === 'FAIL') blk='<span class="blk blk-fail">&#x2717; FAIL</span>';
+    else if (!m.block_at)                 blk='<span class="blk blk-allow">&#x2713; ALLOW</span>';
+    else if (m.block_at === 'opa')        blk='<span class="blk blk-opa">&#x2717; OPA</span>';
+    else                                  blk='<span class="blk blk-istio">&#x2717; Istio</span>';
+    var codes = r ? (r.expect + ' &rarr; ' + r.result) : (m.signals.method + ' ' + m.signals.path);
+    html += '<div class="tc' + (selId===id?' sel':'') + (rid?' run':'') + '" data-id="' + id + '" onclick="pick(this.dataset.id)">' +
       '<div class="tid">' + id + '</div>' +
       '<div class="ttitle">' + m.title + '</div>' +
-      '<div class="tdesc">'  + m.desc  + '</div>' +
-      '<div class="tc-row">' +
-        '<span class="codes">' + codes + '</span>' +
-        '<span class="badge ' + badgeCls + '">' + badgeTxt + '</span>' +
-      '</div>' +
-      '<div>' + blk + '</div>' +
-    '</div>';
+      '<div class="tdesc">' + m.desc + '</div>' +
+      '<div class="tc-row"><span class="codes">' + codes + '</span><span class="badge ' + badgeCls + '">' + badgeTxt + '</span></div>' +
+      '<div>' + blk + '</div></div>';
   }
   g('cards').innerHTML = html;
 }
 
-// ── tab click ─────────────────────────────────────────────────────────────
 g('tabs').addEventListener('click', function(e) {
   var tab = e.target.closest('.tab');
   if (!tab) return;
@@ -593,31 +713,107 @@ g('tabs').addEventListener('click', function(e) {
   renderCards();
 });
 
-// ── pick scenario ─────────────────────────────────────────────────────────
 function pick(id) {
   selId = id;
   var m = META[id];
-  if (!m) { console.warn('META missing for', id); return; }
-
+  if (!m) return;
   var ew = (m.pipeline === 'ew');
-  g('pl-ns').classList.toggle('hidden',  ew);
-  g('pl-ew').classList.toggle('hidden', !ew);
-  var dirEl = g('pl-dir');
-  dirEl.classList.remove('hidden');
-  dirEl.textContent = ew ? 'East-West (Lateral)' : 'North-South';
-
+  g('wrap-ns').classList.toggle('hidden',  ew);
+  g('wrap-ew').classList.toggle('hidden', !ew);
+  g('topo-hint').classList.add('hidden');
+  switchRTab('graph');
   renderDetail(id, m);
-  resetPipeline(m.flow);
-  if (!animBusy) animateFlow(m.flow, m.block_at);
+  resetGraph(m.flow);
   renderCards();
-  runCmd(id);
+  runCmd(id, function() {
+    if (!animBusy) animateGraph(m.flow, m.block_at);
+  });
 }
 
-// ── detail pane ───────────────────────────────────────────────────────────
+function ewMode() {
+  return g('wrap-ew') && !g('wrap-ew').classList.contains('hidden');
+}
+
+function markerIds() {
+  var sfx = ewMode() ? '-ew' : '';
+  return { def: 'url(#arh' + sfx + ')', ok: 'url(#arh-ok' + sfx + ')', ng: 'url(#arh-ng' + sfx + ')' };
+}
+
+function resetGraph(flow) {
+  flow.forEach(function(nid) {
+    var el = g('node-' + nid);
+    if (el) el.setAttribute('class', 'topo-node n-inactive');
+  });
+  var m = markerIds();
+  Object.keys(EDGE_IDS).forEach(function(key) {
+    var el = g(EDGE_IDS[key]);
+    if (el) { el.setAttribute('class', 'topo-edge'); el.setAttribute('marker-end', m.def); }
+  });
+}
+
+function animateGraph(flow, blockAt) {
+  animBusy = true;
+  var i = 0;
+  var m = markerIds();
+  function step() {
+    if (i >= flow.length) { animBusy = false; return; }
+    var nid = flow[i];
+    var el  = g('node-' + nid);
+    if (!el) { i++; step(); return; }
+    if (i > 0) {
+      var eid = EDGE_IDS[nid];
+      if (eid) {
+        var earr = g(eid);
+        if (earr) {
+          var blocked = (nid === blockAt);
+          earr.setAttribute('class', 'topo-edge ' + (blocked ? 'e-blocked' : 'e-ok'));
+          earr.setAttribute('marker-end', blocked ? m.ng : m.ok);
+        }
+      }
+    }
+    if (nid === blockAt) {
+      el.setAttribute('class', 'topo-node n-blocked');
+      for (var j = i+1; j < flow.length; j++) {
+        var e2 = g('node-' + flow[j]);
+        if (e2) e2.setAttribute('class', 'topo-node n-unreachable');
+      }
+      animBusy = false;
+      return;
+    }
+    el.setAttribute('class', 'topo-node ' + (i === flow.length-1 ? 'n-allowed' : 'n-passed'));
+    i++;
+    setTimeout(step, 320);
+  }
+  setTimeout(step, 320);
+}
+
+function renderReport() {
+  var ids  = Object.keys(META);
+  var rows = '';
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i], m = META[id], r = results[id];
+    var status = r ? r.status : 'UNKNOWN';
+    var expect = r ? r.expect : '-';
+    var result = r ? r.result : '-';
+    var rowCls = status === 'PASS' ? 'rr-pass' : status === 'FAIL' ? 'rr-fail' : '';
+    var badgeCls = status === 'PASS' ? 'b-pass' : status === 'FAIL' ? 'b-fail' : 'b-unknown';
+    var layer = m.defense_layer
+      ? m.defense_layer
+      : '<span style="color:#3fb950">&#x2713; ALLOW</span>';
+    rows += '<tr class="' + rowCls + '">' +
+      '<td class="r-id">' + id + '</td>' +
+      '<td>' + m.title + '</td>' +
+      '<td class="r-layer">' + layer + '</td>' +
+      '<td class="r-code">' + expect + '</td>' +
+      '<td class="r-code">' + result + '</td>' +
+      '<td style="text-align:center"><span class="badge ' + badgeCls + '">' + status + '</span></td>' +
+    '</tr>';
+  }
+  g('report-body').innerHTML = rows || '<tr><td colspan="6" style="text-align:center;color:#484f58;padding:20px">No results yet</td></tr>';
+}
+
 function renderDetail(id, m) {
   var s = m.signals;
-
-  // request signal tags
   var tags = '';
   if (s.method)   tags += '<span class="tag t-m">' + s.method + '</span>';
   if (s.path)     tags += '<span class="tag t-p">' + s.path + '</span>';
@@ -626,82 +822,51 @@ function renderDetail(id, m) {
   if (s.posture === 'enabled')  tags += '<span class="tag t-ok">fw:enabled</span>';
   if (s.posture === 'disabled') tags += '<span class="tag t-ng">fw:disabled</span>';
   if (s.sa)       tags += '<span class="tag t-sa">sa:' + s.sa + '</span>';
-
-  // step-by-step request journey
-  var journey = '';
-  var reachedBlock = false;
+  var journey = '', reachedBlock = false;
   for (var fi = 0; fi < m.flow.length; fi++) {
-    var nid    = m.flow[fi];
-    var nLabel = NODE_NAMES[nid] || nid;
-    var isBlock  = (nid === m.block_at);
-    var isSource = (fi === 0);
-    var isSkip   = reachedBlock;
-
-    var stepCls, badgeCls, badgeTxt;
-    if (isSource) {
-      stepCls = 'j-src';   badgeCls = 'jb-src';   badgeTxt = 'source';
-    } else if (isSkip) {
-      stepCls = 'j-skip';  badgeCls = 'jb-skip';  badgeTxt = 'skipped';
-    } else if (isBlock) {
-      stepCls = 'j-block'; badgeCls = 'jb-block'; badgeTxt = '&#x2717; BLOCKED HERE';
-    } else {
-      stepCls = 'j-pass';  badgeCls = 'jb-pass';  badgeTxt = '&#x2713; passed';
-    }
-
-    journey += '<div class="jstep ' + stepCls + '"><div class="jstep-body">';
+    var nid = m.flow[fi], nLabel = NODE_NAMES[nid] || nid;
+    var isBlock = (nid === m.block_at), isSource = (fi === 0), isSkip = reachedBlock;
+    var sc, bc, bt;
+    if (isSource)      { sc='j-src';   bc='jb-src';   bt='source'; }
+    else if (isSkip)   { sc='j-skip';  bc='jb-skip';  bt='skipped'; }
+    else if (isBlock)  { sc='j-block'; bc='jb-block'; bt='&#x2717; BLOCKED HERE'; }
+    else               { sc='j-pass';  bc='jb-pass';  bt='&#x2713; passed'; }
+    journey += '<div class="jstep ' + sc + '"><div class="jstep-body">';
     journey += '<div class="jstep-row"><span class="jstep-name">' + nLabel + '</span>';
-    journey += '<span class="jstep-badge ' + badgeCls + '">' + badgeTxt + '</span></div>';
-    if (isBlock) {
-      journey += '<div class="j-reason">' + m.block_reason + '</div>';
-    }
+    journey += '<span class="jstep-badge ' + bc + '">' + bt + '</span></div>';
+    if (isBlock) journey += '<div class="j-reason">' + m.block_reason + '</div>';
     journey += '</div></div>';
     if (isBlock) reachedBlock = true;
   }
-
-  var isDeny = (m.block_at !== null && m.block_at !== undefined);
+  var isDeny  = (m.block_at !== null && m.block_at !== undefined);
   var verdict = isDeny ? '&#x2717; BLOCKED' : '&#x2713; ALLOWED';
-  var vcls    = isDeny ? 'v-deny' : 'v-allow';
-
-  var layer = m.defense_layer
-    ? '<div class="d-layer">&#x1F6E1; Defense layer: <strong>' + m.defense_layer + '</strong></div>'
-    : '';
-
-  var insight = m.why
-    ? '<div class="d-sec">Why it was blocked</div><div class="d-why">' + m.why + '</div>'
-    : '';
-
+  var layer   = m.defense_layer ? '<div class="d-layer">&#x1F6E1; Defense: <strong>' + m.defense_layer + '</strong></div>' : '';
+  var insight = m.why ? '<div class="d-sec">Why it was blocked</div><div class="d-why">' + m.why + '</div>' : '';
   g('detail').innerHTML =
     '<div class="d-sec">Attack &mdash; ' + id + '</div>' +
     '<div class="d-desc">' + m.desc + '</div>' +
     '<div class="tags">' + tags + '</div>' +
     '<div class="d-sec">Request Journey</div>' +
     '<div class="journey">' + journey + '</div>' +
-    '<div class="verdict ' + vcls + '">' + verdict + '</div>' +
-    layer +
-    insight +
-    '<div class="d-make">&#x1F9EA; make target: <code style="color:#79c0ff">' + m.make + '</code></div>';
+    '<div class="verdict ' + (isDeny?'v-deny':'v-allow') + '">' + verdict + '</div>' +
+    layer + insight +
+    '<div class="d-make">&#x1F9EA; <code style="color:#79c0ff">' + m.make + '</code></div>';
 }
 
-// ── run make command ──────────────────────────────────────────────────────
-function runCmd(id) {
+function runCmd(id, onDone) {
   if (sse) { sse.close(); sse = null; }
-
   running = id;
   renderCards();
-
   var badge = g('rbadge');
   var label = META[id] ? META[id].make : id;
-  badge.className   = 'rbadge rb-run';
+  badge.className = 'rbadge rb-run';
   badge.textContent = 'running';
   g('term-ttl').textContent = '$ make --no-print-directory ' + label;
-
   var term = g('term');
   term.innerHTML = '';
   addLine('$ make --no-print-directory ' + label, 'c-hdr');
   addLine('------------------------------------------', 'c-sep');
-
   sse = new EventSource('/api/run/' + id);
-
   sse.onmessage = function(ev) {
     var d = JSON.parse(ev.data);
     if (d.done) {
@@ -713,25 +878,21 @@ function runCmd(id) {
       addLine('Exit: ' + d.status + '  (code ' + d.exit_code + ')', ok ? 'c-ok' : 'c-ng');
       if (!results[id]) results[id] = {};
       results[id].status = d.status;
-      renderCards();
-      renderStats();
+      renderCards(); renderStats(); renderReport();
+      if (onDone) onDone();
       return;
     }
     addLine(d.line);
   };
-
   sse.onerror = function() {
     if (sse) { sse.close(); sse = null; }
     running = null;
-    badge.className   = 'rbadge rb-idle';
-    badge.textContent = 'idle';
+    badge.className = 'rbadge rb-idle'; badge.textContent = 'idle';
     addLine('ERROR: server unreachable or make not found', 'c-err');
-    addLine('Run from WSL: python3 visualizer/server.py', 'c-err');
     renderCards();
   };
 }
 
-// ── workflow buttons ──────────────────────────────────────────────────────
 function runW(id) {
   var el = g('bb-' + id);
   if (el) { el.classList.remove('bb-ok','bb-ng'); el.classList.add('bb-run'); }
@@ -747,7 +908,32 @@ function runW(id) {
   obs.observe(g('rbadge'), { attributes: true, attributeFilter: ['class'] });
 }
 
-// ── terminal line ─────────────────────────────────────────────────────────
+function fetchCluster() {
+  var term = g('term');
+  term.innerHTML = '';
+  addLine('$ kubectl cluster status', 'c-hdr');
+  addLine('------------------------------------------', 'c-sep');
+  fetch('/api/cluster')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { addLine('ERROR: ' + d.error, 'c-err'); return; }
+      addLine('PODS:', 'c-hdr');
+      (d.pods || []).forEach(function(p) {
+        var ok = p.status === 'Running';
+        var line = '  ' + p.name + ' '.repeat(Math.max(1,36-p.name.length)) + p.ready + '   ' + p.status;
+        addLine(line, ok ? 'c-pass' : 'c-fail');
+      });
+      if ((d.policies||[]).length) {
+        addLine('', '');
+        addLine('POLICIES:', 'c-hdr');
+        d.policies.forEach(function(p) {
+          addLine('  ' + p.name + ' '.repeat(Math.max(1,36-p.name.length)) + p.kind + (p.action&&p.action!=='-'?'   '+p.action:''), 'c-exp');
+        });
+      }
+    })
+    .catch(function(e) { addLine('ERROR: ' + String(e), 'c-err'); });
+}
+
 function addLine(text, cls) {
   var term = g('term');
   var s = document.createElement('span');
@@ -762,60 +948,16 @@ function lineClass(l) {
   if (!l) return '';
   if (l.indexOf('STATUS: PASS') >= 0) return 'c-pass';
   if (l.indexOf('STATUS: FAIL') >= 0) return 'c-fail';
-  if (/^EXPECT:/.test(l))             return 'c-exp';
-  if (/^RESULT:/.test(l))             return 'c-res';
+  if (/^EXPECT:/.test(l)) return 'c-exp';
+  if (/^RESULT:/.test(l)) return 'c-res';
   if (/^>>>/.test(l) || /^\\[.+\\]/.test(l)) return 'c-hdr';
-  if (/^[=\\-]{3,}/.test(l))          return 'c-sep';
-  if (/^(NOTE|WARNING):/.test(l))     return 'c-note';
+  if (/^[=\\-]{3,}/.test(l)) return 'c-sep';
+  if (/^(NOTE|WARNING):/.test(l)) return 'c-note';
   if (l.indexOf('SCENARIO') >= 0 && l.indexOf('PASS') >= 0) return 'c-pass';
   if (l.indexOf('SCENARIO') >= 0 && l.indexOf('FAIL') >= 0) return 'c-fail';
   return '';
 }
 
-// ── pipeline animation ────────────────────────────────────────────────────
-function resetPipeline(flow) {
-  flow.forEach(function(id) {
-    var el = g('node-' + id);
-    if (el) el.className = 'pln inactive';
-  });
-  Object.keys(ARROW).forEach(function(key) {
-    var el = g(ARROW[key]);
-    if (el) el.className = 'pl-arr';
-  });
-}
-
-function animateFlow(flow, blockAt) {
-  animBusy = true;
-  var i = 0;
-  function step() {
-    if (i >= flow.length) { animBusy = false; return; }
-    var nid = flow[i];
-    var el  = g('node-' + nid);
-    if (!el) { i++; step(); return; }
-
-    if (i > 0) {
-      var arr = g(ARROW[nid]);
-      if (arr) arr.className = 'pl-arr ' + (nid === blockAt ? 'blocked' : 'ok');
-    }
-
-    if (nid === blockAt) {
-      el.className = 'pln blocked';
-      for (var j = i + 1; j < flow.length; j++) {
-        var e = g('node-' + flow[j]);
-        if (e) e.className = 'pln unreachable';
-      }
-      animBusy = false;
-      return;
-    } else {
-      el.className = (i === flow.length - 1) ? 'pln allowed' : 'pln passed';
-    }
-    i++;
-    setTimeout(step, 320);
-  }
-  setTimeout(step, 320);
-}
-
-// ── load test results from server ─────────────────────────────────────────
 function load() {
   fetch('/api/data')
     .then(function(r) { return r.json(); })
@@ -823,8 +965,7 @@ function load() {
       results = d.results || {};
       g('warn').classList.add('hidden');
       g('bot-ts').textContent = 'updated ' + new Date().toLocaleTimeString();
-      renderStats();
-      renderCards();
+      renderStats(); renderCards(); renderReport();
     })
     .catch(function() {
       g('warn').classList.remove('hidden');
@@ -832,9 +973,7 @@ function load() {
     });
 }
 
-// ── startup ───────────────────────────────────────────────────────────────
-renderCards();
-renderStats();
+renderCards(); renderStats(); renderReport();
 load();
 setInterval(load, 30000);
 </script>
@@ -857,7 +996,6 @@ def get_html():
     return _cached_html
 
 
-# ── HTTP handler ───────────────────────────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
@@ -880,6 +1018,16 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
 
+        elif path == "/api/cluster":
+            payload = parse_cluster()
+            body = json.dumps(payload, ensure_ascii=False).encode()
+            self.send_response(200)
+            self.send_header("Content-Type",                "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length",              str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         elif path.startswith("/api/run/"):
             self._sse(path[9:])
 
@@ -891,7 +1039,6 @@ class Handler(BaseHTTPRequestHandler):
         if not target:
             self.send_error(404, "Unknown: " + cmd_id)
             return
-
         self.send_response(200)
         self.send_header("Content-Type",                "text/event-stream")
         self.send_header("Cache-Control",               "no-cache")
@@ -931,9 +1078,7 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-# ── entry ──────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # quick sanity check
     html = build_html()
     assert "ZTA_META_JSON" not in html, "META injection failed!"
     assert '"A-NS-1"' in html, "META content missing!"
