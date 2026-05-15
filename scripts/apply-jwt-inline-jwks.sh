@@ -4,8 +4,8 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-JWKS_URL="http://localhost:8080/realms/myrealm/protocol/openid-connect/certs"
-ISSUER="http://localhost:8080/realms/myrealm"
+JWKS_URL="http://localhost:18080/realms/myrealm/protocol/openid-connect/certs"
+ISSUER="http://localhost:18080/realms/myrealm"
 
 JWKS_JSON="$(curl -s "$JWKS_URL")"
 if [[ -z "$JWKS_JSON" ]]; then

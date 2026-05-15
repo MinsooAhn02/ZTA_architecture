@@ -4,7 +4,7 @@
 #  Creates: myrealm, zta-client, testuser (role: admin)
 # ============================================================
 
-KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:18080}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 ADMIN_PASS="${ADMIN_PASS:-admin}"
 

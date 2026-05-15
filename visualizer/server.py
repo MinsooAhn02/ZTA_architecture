@@ -4,7 +4,7 @@ ZTA Security Dashboard
 Run  : python3 visualizer/server.py   (WSL required for make)
 Open : http://localhost:5001
 """
-import json, re, subprocess, mimetypes
+import json, os, re, signal, subprocess, mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -737,6 +737,12 @@ g('tabs').addEventListener('click', function(e) {
 });
 
 function pick(id) {
+  if (running) {
+    var b = g('rbadge');
+    b.style.outline = '2px solid #f85149';
+    setTimeout(function() { b.style.outline = ''; }, 400);
+    return;
+  }
   selId = id;
   var m = META[id];
   if (!m) return;
@@ -748,9 +754,7 @@ function pick(id) {
   renderDetail(id, m);
   resetGraph(m.flow);
   renderCards();
-  runCmd(id, function() {
-    if (!animBusy) animateGraph(m.flow, m.block_at);
-  });
+  runCmd(id);
 }
 
 function ewMode() {
@@ -772,6 +776,39 @@ function resetGraph(flow) {
     var el = g(EDGE_IDS[key]);
     if (el) { el.setAttribute('class', 'topo-edge'); el.setAttribute('marker-end', m.def); }
   });
+}
+
+function applyNodeState(nid, state) {
+  var el = g('node-' + nid);
+  if (!el) return;
+  var m = markerIds();
+  var cls = { active: 'n-passed', passed: 'n-passed', blocked: 'n-blocked', unreachable: 'n-unreachable', allowed: 'n-allowed' };
+  el.setAttribute('class', 'topo-node ' + (cls[state] || 'n-inactive'));
+  var eid = EDGE_IDS[nid];
+  if (!eid) return;
+  var earr = g(eid);
+  if (!earr) return;
+  if (state === 'blocked') {
+    earr.setAttribute('class', 'topo-edge e-blocked');
+    earr.setAttribute('marker-end', m.ng);
+  } else if (state === 'passed' || state === 'allowed') {
+    earr.setAttribute('class', 'topo-edge e-ok');
+    earr.setAttribute('marker-end', m.ok);
+  }
+}
+
+function replayFlow(lines) {
+  animBusy = true;
+  var i = 0;
+  function step() {
+    if (i >= lines.length) { animBusy = false; return; }
+    var line = lines[i++];
+    var nm = line.match(/node=(\\S+)/);
+    var sm = line.match(/state=(\\S+)/);
+    if (nm && sm) applyNodeState(nm[1], sm[1]);
+    setTimeout(step, 320);
+  }
+  setTimeout(step, 320);
 }
 
 function animateGraph(flow, blockAt) {
@@ -854,6 +891,7 @@ function renderDetail(id, m) {
 }
 
 function runCmd(id, onDone) {
+  var hadSse = !!sse;
   if (sse) { sse.close(); sse = null; }
   running = id;
   renderCards();
@@ -866,7 +904,10 @@ function runCmd(id, onDone) {
   term.innerHTML = '';
   addLine('$ make --no-print-directory ' + label, 'c-hdr');
   addLine('------------------------------------------', 'c-sep');
-  sse = new EventSource('/api/run/' + id);
+  var startDelay = hadSse ? 250 : 0;
+  setTimeout(function() { sse = new EventSource('/api/run/' + id); attachSse(); }, startDelay);
+  function attachSse() {
+  var flowLines = [];
   sse.onmessage = function(ev) {
     var d = JSON.parse(ev.data);
     if (d.done) {
@@ -879,7 +920,16 @@ function runCmd(id, onDone) {
       if (!results[id]) results[id] = {};
       results[id].status = d.status;
       renderCards(); renderStats(); renderReport();
+      if (flowLines.length > 0) {
+        replayFlow(flowLines);
+      } else if (!animBusy && selId === id && META[id] && META[id].flow) {
+        animateGraph(META[id].flow, META[id].block_at);
+      }
       if (onDone) onDone();
+      return;
+    }
+    if (d.line && d.line.indexOf('[ZTA:FLOW]') === 0) {
+      flowLines.push(d.line);
       return;
     }
     addLine(d.line);
@@ -891,9 +941,16 @@ function runCmd(id, onDone) {
     addLine('ERROR: server unreachable or make not found', 'c-err');
     renderCards();
   };
+  } // end attachSse
 }
 
 function runW(id) {
+  if (running) {
+    var b = g('rbadge');
+    b.style.outline = '2px solid #f85149';
+    setTimeout(function() { b.style.outline = ''; }, 400);
+    return;
+  }
   var el = g('bb-' + id);
   if (el) { el.classList.remove('bb-ok','bb-ng'); el.classList.add('bb-run'); }
   runCmd(id);
@@ -990,10 +1047,7 @@ def build_html():
 
 
 def get_html():
-    global _cached_html
-    if _cached_html is None:
-        _cached_html = build_html().encode("utf-8")
-    return _cached_html
+    return build_html().encode("utf-8")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1075,11 +1129,13 @@ class Handler(BaseHTTPRequestHandler):
             except (BrokenPipeError, ConnectionResetError):
                 raise
 
+        proc = None
         try:
             proc = subprocess.Popen(
                 ["make", "--no-print-directory", target],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 cwd=str(BASE), text=True, bufsize=1, errors="replace",
+                start_new_session=True,
             )
             for line in proc.stdout:
                 emit({"line": line.rstrip()})
@@ -1087,8 +1143,9 @@ class Handler(BaseHTTPRequestHandler):
             emit({"done": True, "status": "PASS" if proc.returncode == 0 else "FAIL",
                   "exit_code": proc.returncode})
         except (BrokenPipeError, ConnectionResetError):
-            try: proc.terminate()
-            except Exception: pass
+            if proc:
+                try: os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                except Exception: pass
         except FileNotFoundError:
             emit({"line": "ERROR: 'make' not found. Run from WSL:"})
             emit({"line": "  python3 visualizer/server.py"})
