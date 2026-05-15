@@ -81,8 +81,8 @@ and east-west paths and map directly to NIST SP 800-207 tenets.
   - `05-checklist.md`: Implementation and scenario verification status
   - `06-final-report-draft.md`: Final report for submission
 - visualizer/: Web-based security dashboard (server.py — live test runner + pipeline view)
-- istio-1.28.3/: Istio binary/manifests (auto-downloaded by Makefile if missing)
 - Makefile: setup, deployment, test, demo, monitoring, cleanup automation
+- (Istio binary is auto-downloaded by Makefile during `make step1` if not already present)
 
 ## ZTA Security Dashboard (Visualizer)
 
@@ -93,14 +93,15 @@ A browser-based control panel that runs directly from WSL — no extra dependenc
 **How to run (WSL Ubuntu terminal):**
 
 ```bash
-# 1. Make sure you are inside the project directory in WSL
-cd ~/ZTA_architecture          # or wherever you cloned the repo
-
-# 2. Start the dashboard server
+# From the project root directory in WSL:
+make view        # short alias (recommended)
+# or
+make visualizer
+# or
 python3 visualizer/server.py
 
-# 3. Open in browser (Windows host)
-#    http://localhost:5001
+# Then open in browser (Windows host):
+#   http://localhost:5001
 ```
 
 > **Important:** run from WSL, not PowerShell. The server shells out to `make`
@@ -139,6 +140,7 @@ python3 visualizer/server.py
 | ZTA Security Pipeline | Animated node graph for north-south (Client → Istio JWT → Istio DENY → OPA → App) and east-west (Rogue Pod → mTLS → SPIFFE → Backend) flows. Nodes light up green (passed) or red/pulsing (blocked) as the scenario plays. |
 | Request Journey       | Step-by-step list showing exactly which layer passed the request and which one blocked it, with the specific policy rule shown inline at the block point.                                                                  |
 | Why it was blocked    | Per-scenario explanation of the underlying ZTA principle — what the attacker tried, which control stops it, and why it matters.                                                                                            |
+| Report tab            | Shows a Download PDF button for `research_report.pdf`. Click to download — the file is not displayed inline. Button is disabled if the file is not present in the project root.                                           |
 | Terminal (bottom)     | Live `make` output streamed via SSE from WSL. Starts automatically when a card is clicked; also triggered by the bottom workflow buttons.                                                                                  |
 | Workflow buttons      | One-click runners for `step1` / `step2` / `step3` / `step4` / `test-all` / `ports` / `status` / `jwt-refresh` / `opa-logs` / `add-viewer`.                                                                                 |
 
@@ -257,9 +259,9 @@ make test-all
 
 ```bash
 make ports        # Start all port-forwards first
-make open-kiali   # Open Kiali in browser
-make open-grafana # Open Grafana in browser
-make open-keycloak # Open Keycloak in browser
+make open-kiali    # Open Kiali in browser    (http://localhost:20000)
+make open-grafana  # Open Grafana in browser  (http://localhost:20002)
+make open-keycloak # Open Keycloak in browser (http://localhost:18080)
 ```
 
 ## Dashboard Usage Guide
@@ -272,7 +274,7 @@ Kiali visualizes your service mesh and helps you understand traffic flow.
 
 ```bash
 make ports       # Ensure port-forward is running
-make open-kiali  # Opens http://localhost:20001
+make open-kiali  # Opens http://localhost:20000
 ```
 
 **What to Look For:**
@@ -307,7 +309,7 @@ Grafana displays detailed metrics and performance data.
 
 ```bash
 make ports        # Ensure port-forward is running
-make open-grafana # Opens http://localhost:3000
+make open-grafana # Opens http://localhost:20002
 ```
 
 **Useful Dashboards:**
@@ -342,7 +344,7 @@ Keycloak manages users, roles, and JWT token issuance.
 
 ```bash
 make ports         # Ensure port-forward is running
-make open-keycloak # Opens http://localhost:8080
+make open-keycloak # Opens http://localhost:18080
 ```
 
 **Login Credentials:**
@@ -378,13 +380,13 @@ make open-keycloak # Opens http://localhost:8080
 
 ### Quick Dashboard Commands Summary
 
-| Command              | URL                    | Purpose                      |
-| -------------------- | ---------------------- | ---------------------------- |
-| `make open-kiali`    | http://localhost:20001 | Service mesh visualization   |
-| `make open-grafana`  | http://localhost:3000  | Metrics & performance graphs |
-| `make open-keycloak` | http://localhost:8080  | Identity provider admin      |
-| `make ports`         | -                      | Start all port-forwards      |
-| `make ports-stop`    | -                      | Stop all port-forwards       |
+| Command              | URL                     | Purpose                      |
+| -------------------- | ----------------------- | ---------------------------- |
+| `make open-kiali`    | http://localhost:20000  | Service mesh visualization   |
+| `make open-grafana`  | http://localhost:20002  | Metrics & performance graphs |
+| `make open-keycloak` | http://localhost:18080  | Identity provider admin      |
+| `make ports`         | -                       | Start all port-forwards      |
+| `make ports-stop`    | -                       | Stop all port-forwards       |
 
 ## Key Make Targets
 

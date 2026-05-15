@@ -4,7 +4,7 @@ ZTA Security Dashboard
 Run  : python3 visualizer/server.py   (WSL required for make)
 Open : http://localhost:5001
 """
-import json, re, subprocess
+import json, re, subprocess, mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -153,10 +153,10 @@ body {
   flex-shrink: 0; background: #161b22; border-bottom: 1px solid #21262d;
   padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
 }
-.hdr-title h1 { font-size: 15px; font-weight: 700; color: #f0f6fc; }
-.hdr-title .sub { font-size: 11px; color: #6e7681; margin-top: 1px; }
+.hdr-title h1 { font-size: 18px; font-weight: 700; color: #f0f6fc; }
+.hdr-title .sub { font-size: 11px; color: #6e7681; margin-top: 2px; }
 .stats { display: flex; gap: 16px; }
-.stat .val { font-size: 20px; font-weight: 700; line-height: 1; }
+.stat .val { font-size: 26px; font-weight: 700; line-height: 1; }
 .stat .lbl { font-size: 10px; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; }
 .st-t .val { color: #79c0ff; } .st-p .val { color: #3fb950; } .st-f .val { color: #f85149; }
 .svc-links { display: flex; gap: 6px; margin-left: auto; }
@@ -254,8 +254,13 @@ body {
 .topo-node.n-allowed rect { fill: #0a2a1a; stroke: #2ea043; }
 .topo-node.n-allowed .n-label { fill: #56d364; }
 
-.topo-node.n-blocked rect { fill: #2a0c0c; stroke: #da3633; animation: rpulse .9s ease 4; }
+.topo-node.n-blocked rect { fill: #2a0c0c; stroke: #da3633; }
 .topo-node.n-blocked .n-label { fill: #f85149; }
+.topo-node.n-blocked { animation: nodepulse 1s ease-in-out 5; }
+@keyframes nodepulse {
+  0%,100% { filter: drop-shadow(0 0 0px rgba(218,54,51,0)); }
+  50%      { filter: drop-shadow(0 0 8px rgba(218,54,51,.9)); }
+}
 
 .topo-node.n-unreachable rect { opacity: .08; }
 .topo-node.n-unreachable text { opacity: .08; }
@@ -265,8 +270,9 @@ body {
 .topo-kc .n-sub   { fill: #7d5a00 !important; }
 
 .topo-edge { stroke: #30363d; stroke-width: 2; fill: none; transition: stroke .25s; }
-.topo-edge.e-ok      { stroke: #238636; }
+.topo-edge.e-ok      { stroke: #238636; stroke-dasharray: 6,3; animation: flowdash 1.2s linear infinite; }
 .topo-edge.e-blocked { stroke: #da3633; stroke-dasharray: 5,3; }
+@keyframes flowdash { to { stroke-dashoffset: -18; } }
 .topo-kc-edge { stroke: #d29922; stroke-width: 1.5; stroke-dasharray: 4,3; fill: none; opacity: .7; }
 .e-label { fill: #484f58; font-size: 9px; font-family: monospace; }
 
@@ -357,7 +363,7 @@ body {
 .rb-ok   { background: #1c4025; color: #3fb950; border-color: #238636; }
 .rb-ng   { background: #3d1b1b; color: #f85149; border-color: #da3633; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-.term-body { flex: 1; overflow-y: auto; padding: 10px 16px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; line-height: 1.7; }
+.term-body { flex: 1; overflow-y: auto; padding: 10px 16px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 14px; line-height: 1.7; }
 .term-body::-webkit-scrollbar { width: 4px; }
 .term-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
 .tl { display: block; white-space: pre-wrap; word-break: break-all; }
@@ -386,7 +392,7 @@ body {
 <div class="hdr">
   <div class="hdr-title">
     <h1>&#x2B21; ZTA Security Dashboard</h1>
-    <div class="sub">NIST SP 800-207 &middot; Keycloak + Istio + OPA</div>
+    <div class="sub">Minsoo Ahn &middot; NIST SP 800-207 &middot; Keycloak + Istio + OPA</div>
   </div>
   <div class="stats">
     <div class="stat st-t"><div class="val" id="s-total">0</div><div class="lbl">Total</div></div>
@@ -394,9 +400,9 @@ body {
     <div class="stat st-f"><div class="val" id="s-fail">0</div><div class="lbl">Fail</div></div>
   </div>
   <div class="svc-links">
-    <a class="svc-btn svc-kc" href="http://localhost:8080" target="_blank">&#x1F511; Keycloak</a>
-    <a class="svc-btn svc-gf" href="http://localhost:3000" target="_blank">&#x1F4CA; Grafana</a>
-    <a class="svc-btn svc-ki" href="http://localhost:20001" target="_blank">&#x1F578; Kiali</a>
+    <a class="svc-btn svc-kc" href="http://localhost:18080" target="_blank">&#x1F511; Keycloak</a>
+    <a class="svc-btn svc-gf" href="http://localhost:20002" target="_blank">&#x1F4CA; Grafana</a>
+    <a class="svc-btn svc-ki" href="http://localhost:20000" target="_blank">&#x1F578; Kiali</a>
   </div>
 </div>
 
@@ -564,21 +570,16 @@ body {
 
     <!-- Report panel -->
     <div id="panel-report" class="r-panel hidden">
-      <div class="report-wrap">
-        <div class="report-hdr">Test Results Summary</div>
-        <table class="report-tbl">
-          <thead>
-            <tr>
-              <th>ID</th><th>Title</th><th>Defense Layer</th>
-              <th style="text-align:center">Expect</th>
-              <th style="text-align:center">Result</th>
-              <th style="text-align:center">Status</th>
-            </tr>
-          </thead>
-          <tbody id="report-body">
-            <tr><td colspan="6" style="text-align:center;color:#484f58;padding:20px">Run make test-all to populate</td></tr>
-          </tbody>
-        </table>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:32px;">
+        <div style="font-size:48px;">&#x1F4C4;</div>
+        <div style="font-size:15px;color:#c9d1d9;font-weight:600;">ZTA Research Report</div>
+        <div style="font-size:12px;color:#6e7681;">NIST SP 800-207 &mdash; Keycloak + Istio + OPA</div>
+        <a id="report-dl-btn" href="/report.pdf" download="zta-research-report.pdf"
+           style="display:inline-flex;align-items:center;gap:8px;padding:10px 28px;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none;background:#1c4025;color:#3fb950;border:1px solid #238636;transition:opacity .15s;"
+           onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
+          &#x2B07; Download PDF
+        </a>
+        <div id="report-no-pdf" style="display:none;font-size:12px;color:#6e7681;font-style:italic;">research_report.pdf not found in project root</div>
       </div>
     </div>
 
@@ -665,6 +666,24 @@ function switchRTab(name) {
     if (tab)   tab.classList.toggle('active', n === name);
     if (panel) panel.classList.toggle('hidden', n !== name);
   });
+  if (name === 'report') {
+    fetch('/api/report-exists')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var btn  = g('report-dl-btn');
+        var note = g('report-no-pdf');
+        if (!d.exists) {
+          if (btn)  btn.style.opacity = '.35';
+          if (btn)  btn.style.pointerEvents = 'none';
+          if (note) note.style.display = 'block';
+        } else {
+          if (btn)  btn.style.opacity = '1';
+          if (btn)  btn.style.pointerEvents = '';
+          if (note) note.style.display = 'none';
+        }
+      })
+      .catch(function() {});
+  }
 }
 
 function renderStats() {
@@ -676,6 +695,8 @@ function renderStats() {
   g('s-fail').textContent  = fail;
 }
 
+var CAT_COLOR = { 'A': '#8957e5', 'B': '#388bfd', 'C': '#3fb950', 'D': '#e3b341', 'E': '#f85149' };
+
 function renderCards() {
   var ids = Object.keys(META);
   if (filter !== 'all') ids = ids.filter(function(id) { return id.indexOf(filter + '-') === 0; });
@@ -683,6 +704,8 @@ function renderCards() {
   var html = '';
   for (var i = 0; i < ids.length; i++) {
     var id  = ids[i], m = META[id], r = results[id], rid = (running === id);
+    var cat = id.charAt(0);
+    var catColor = CAT_COLOR[cat] || '#30363d';
     var badgeCls, badgeTxt;
     if      (rid)                 { badgeCls='b-run';     badgeTxt='&#x25B6; ...'; }
     else if (!r)                  { badgeCls='b-unknown'; badgeTxt='&mdash;'; }
@@ -694,7 +717,7 @@ function renderCards() {
     else if (m.block_at === 'opa')        blk='<span class="blk blk-opa">&#x2717; OPA</span>';
     else                                  blk='<span class="blk blk-istio">&#x2717; Istio</span>';
     var codes = r ? (r.expect + ' &rarr; ' + r.result) : (m.signals.method + ' ' + m.signals.path);
-    html += '<div class="tc' + (selId===id?' sel':'') + (rid?' run':'') + '" data-id="' + id + '" onclick="pick(this.dataset.id)">' +
+    html += '<div class="tc' + (selId===id?' sel':'') + (rid?' run':'') + '" data-id="' + id + '" onclick="pick(this.dataset.id)" style="border-left:3px solid ' + catColor + '">' +
       '<div class="tid">' + id + '</div>' +
       '<div class="ttitle">' + m.title + '</div>' +
       '<div class="tdesc">' + m.desc + '</div>' +
@@ -787,30 +810,7 @@ function animateGraph(flow, blockAt) {
   setTimeout(step, 320);
 }
 
-function renderReport() {
-  var ids  = Object.keys(META);
-  var rows = '';
-  for (var i = 0; i < ids.length; i++) {
-    var id = ids[i], m = META[id], r = results[id];
-    var status = r ? r.status : 'UNKNOWN';
-    var expect = r ? r.expect : '-';
-    var result = r ? r.result : '-';
-    var rowCls = status === 'PASS' ? 'rr-pass' : status === 'FAIL' ? 'rr-fail' : '';
-    var badgeCls = status === 'PASS' ? 'b-pass' : status === 'FAIL' ? 'b-fail' : 'b-unknown';
-    var layer = m.defense_layer
-      ? m.defense_layer
-      : '<span style="color:#3fb950">&#x2713; ALLOW</span>';
-    rows += '<tr class="' + rowCls + '">' +
-      '<td class="r-id">' + id + '</td>' +
-      '<td>' + m.title + '</td>' +
-      '<td class="r-layer">' + layer + '</td>' +
-      '<td class="r-code">' + expect + '</td>' +
-      '<td class="r-code">' + result + '</td>' +
-      '<td style="text-align:center"><span class="badge ' + badgeCls + '">' + status + '</span></td>' +
-    '</tr>';
-  }
-  g('report-body').innerHTML = rows || '<tr><td colspan="6" style="text-align:center;color:#484f58;padding:20px">No results yet</td></tr>';
-}
+function renderReport() {}
 
 function renderDetail(id, m) {
   var s = m.signals;
@@ -1025,6 +1025,29 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type",                "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Content-Length",              str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif path == "/api/report-exists":
+            exists = (BASE / "research_report.pdf").exists()
+            body = json.dumps({"exists": exists}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type",                "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length",              str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif path == "/report.pdf":
+            pdf_path = BASE / "research_report.pdf"
+            if not pdf_path.exists():
+                self.send_error(404, "research_report.pdf not found")
+                return
+            body = pdf_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type",        "application/pdf")
+            self.send_header("Content-Disposition", "attachment; filename=\"zta-research-report.pdf\"")
+            self.send_header("Content-Length",      str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 

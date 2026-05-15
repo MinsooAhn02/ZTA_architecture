@@ -37,7 +37,7 @@ MINIKUBE_MEM   := 8192
 ISTIOCTL       := ./istio-1.28.3/bin/istioctl
 NAMESPACE      := default
 KEYCLOAK_REALM := myrealm
-KEYCLOAK_URL   := http://localhost:8080
+KEYCLOAK_URL   := http://localhost:18080
 TEST_SUMMARY_FILE := .test-summary.log
 
 .PHONY: all help status test-all clean \
@@ -62,7 +62,7 @@ TEST_SUMMARY_FILE := .test-summary.log
         ports ports-win ensure-ports port-keycloak port-kiali port-grafana ports-stop \
 	dashboard grafana logs logs-opa logs-frontend logs-backend logs-keycloak logs-pretty \
         clean-all restart \
-	visualizer
+	visualizer view viz
 
 # ============================================================
 #  Quick Start Commands
@@ -75,9 +75,9 @@ all: setup ports
 	@echo "=============================================="
 	@echo ""
 	@echo "  Port-forwards started in background:"
-	@echo "    - Keycloak: http://localhost:8080"
-	@echo "    - Kiali:    http://localhost:20001"
-	@echo "    - Grafana:  http://localhost:3000"
+	@echo "    - Keycloak: http://localhost:18080"
+	@echo "    - Kiali:    http://localhost:20000"
+	@echo "    - Grafana:  http://localhost:20002"
 	@echo ""
 	@echo "  Next steps:"
 	@echo "    make setup-keycloak-viewer  -> Add viewer user (for Scenario D)"
@@ -462,22 +462,22 @@ setup-keycloak-viewer:
 	echo "      vieweruser / viewerpass (role: viewer) -> make get-token-viewer"
 
 open-keycloak:
-	@echo ">>> Keycloak Admin Console: http://localhost:8080"
-	@python3 -c "import webbrowser; webbrowser.open('http://localhost:8080')" 2>/dev/null || \
-		xdg-open "http://localhost:8080" 2>/dev/null || \
-		echo "    Please open http://localhost:8080 manually"
+	@echo ">>> Keycloak Admin Console: http://localhost:18080"
+	@python3 -c "import webbrowser; webbrowser.open('http://localhost:18080')" 2>/dev/null || \
+		xdg-open "http://localhost:18080" 2>/dev/null || \
+		echo "    Please open http://localhost:18080 manually"
 
 open-kiali:
-	@echo ">>> Kiali Dashboard: http://localhost:20001"
-	@python3 -c "import webbrowser; webbrowser.open('http://localhost:20001')" 2>/dev/null || \
-		xdg-open "http://localhost:20001" 2>/dev/null || \
-		echo "    Please open http://localhost:20001 manually"
+	@echo ">>> Kiali Dashboard: http://localhost:20000"
+	@python3 -c "import webbrowser; webbrowser.open('http://localhost:20000')" 2>/dev/null || \
+		xdg-open "http://localhost:20000" 2>/dev/null || \
+		echo "    Please open http://localhost:20000 manually"
 
 open-grafana:
-	@echo ">>> Grafana Dashboard: http://localhost:3000"
-	@python3 -c "import webbrowser; webbrowser.open('http://localhost:3000')" 2>/dev/null || \
-		xdg-open "http://localhost:3000" 2>/dev/null || \
-		echo "    Please open http://localhost:3000 manually"
+	@echo ">>> Grafana Dashboard: http://localhost:20002"
+	@python3 -c "import webbrowser; webbrowser.open('http://localhost:20002')" 2>/dev/null || \
+		xdg-open "http://localhost:20002" 2>/dev/null || \
+		echo "    Please open http://localhost:20002 manually"
 
 get-token:
 	@echo ">>> Issuing JWT token for testuser (role: admin)..."
@@ -1063,37 +1063,37 @@ test-perf-baseline:
 ports: port-keycloak port-kiali port-grafana
 	@echo ""
 	@echo ">>> All port-forwards started (background)"
-	@echo "    Keycloak: http://localhost:8080"
-	@echo "    Kiali:    http://localhost:20001"
-	@echo "    Grafana:  http://localhost:3000"
+	@echo "    Keycloak: http://localhost:18080"
+	@echo "    Kiali:    http://localhost:20000"
+	@echo "    Grafana:  http://localhost:20002"
 
 ensure-ports:
-	@if ! curl -s --connect-timeout 1 http://localhost:8080 >/dev/null 2>&1; then \
+	@if ! curl -s --connect-timeout 1 http://localhost:18080 >/dev/null 2>&1; then \
 		echo ">>> Starting Keycloak port-forward..."; \
-		nohup kubectl port-forward svc/keycloak 8080:8080 >/dev/null 2>&1 & \
+		nohup kubectl port-forward svc/keycloak 18080:8080 >/dev/null 2>&1 & \
 		sleep 2; \
 	fi
 
 port-keycloak:
-	@echo ">>> Starting Keycloak port-forward (8080)..."
+	@echo ">>> Starting Keycloak port-forward (18080)..."
 	@pkill -f "[k]ubectl port-forward svc/keycloak" 2>/dev/null || true
-	@nohup kubectl port-forward svc/keycloak 8080:8080 >/dev/null 2>&1 &
+	@nohup kubectl port-forward svc/keycloak 18080:8080 >/dev/null 2>&1 &
 	@sleep 1
-	@echo "    Started: http://localhost:8080"
+	@echo "    Started: http://localhost:18080"
 
 port-kiali:
-	@echo ">>> Starting Kiali port-forward (20001)..."
+	@echo ">>> Starting Kiali port-forward (20000)..."
 	@pkill -f "[k]ubectl port-forward.*kiali" 2>/dev/null || true
-	@nohup kubectl port-forward svc/kiali -n istio-system 20001:20001 >/dev/null 2>&1 &
+	@nohup kubectl port-forward svc/kiali -n istio-system 20000:20001 >/dev/null 2>&1 &
 	@sleep 1
-	@echo "    Started: http://localhost:20001"
+	@echo "    Started: http://localhost:20000"
 
 port-grafana:
-	@echo ">>> Starting Grafana port-forward (3000)..."
+	@echo ">>> Starting Grafana port-forward (20002)..."
 	@pkill -f "[k]ubectl port-forward.*grafana" 2>/dev/null || true
-	@nohup kubectl port-forward svc/grafana -n istio-system 3000:3000 >/dev/null 2>&1 &
+	@nohup kubectl port-forward svc/grafana -n istio-system 20002:3000 >/dev/null 2>&1 &
 	@sleep 1
-	@echo "    Started: http://localhost:3000"
+	@echo "    Started: http://localhost:20002"
 
 ports-win:
 	@echo ">>> Starting port-forwards in separate Windows (PowerShell)..."
@@ -1163,7 +1163,7 @@ restart:
 # ============================================================
 #  Visualizer (ZTA Security Dashboard)
 # ============================================================
-visualizer:
+visualizer view viz:
 	@echo ">>> Starting ZTA Security Dashboard on http://localhost:5001"
 	@echo "    (Ctrl+C to stop)"
 	@python3 visualizer/server.py
