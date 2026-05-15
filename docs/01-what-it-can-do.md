@@ -163,7 +163,7 @@ make ports
 ### Kiali — Service Mesh Topology
 
 ```bash
-make open-kiali    # http://localhost:20001
+make open-kiali    # http://localhost:20000
 ```
 
 - Visualizes real-time traffic between services
@@ -174,7 +174,7 @@ make open-kiali    # http://localhost:20001
 ### Grafana — Metrics and Performance
 
 ```bash
-make open-grafana  # http://localhost:3000
+make open-grafana  # http://localhost:20002
 ```
 
 - Istio Service Dashboard: request rate, error rate, latency (p50 / p90 / p99)
@@ -184,7 +184,7 @@ make open-grafana  # http://localhost:3000
 ### Keycloak — Identity Provider Admin
 
 ```bash
-make open-keycloak  # http://localhost:8080  (admin / admin)
+make open-keycloak  # http://localhost:18080  (admin / admin)
 ```
 
 - View users: `testuser` (admin role) and `vieweruser` (viewer role)

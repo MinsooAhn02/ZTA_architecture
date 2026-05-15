@@ -7,18 +7,18 @@ make port-keycloak >/dev/null
 make setup-keycloak-viewer >/dev/null
 
 for i in $(seq 1 20); do
-  if curl -s "http://localhost:8080/realms/myrealm" >/dev/null 2>&1; then
+  if curl -s "http://localhost:18080/realms/myrealm" >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
 
-ADMIN_TOKEN=$(curl -s -X POST "http://localhost:8080/realms/myrealm/protocol/openid-connect/token" \
+ADMIN_TOKEN=$(curl -s -X POST "http://localhost:18080/realms/myrealm/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
   -d "username=testuser" -d "password=testpass" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
 
-VIEWER_TOKEN=$(curl -s -X POST "http://localhost:8080/realms/myrealm/protocol/openid-connect/token" \
+VIEWER_TOKEN=$(curl -s -X POST "http://localhost:18080/realms/myrealm/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
   -d "username=vieweruser" -d "password=viewerpass" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
@@ -28,7 +28,7 @@ if [ -z "$ADMIN_TOKEN" ] || [ -z "$VIEWER_TOKEN" ]; then
   exit 1
 fi
 
-FORGED="eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmYWtlIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9teXJlYWxtIn0.invalid"
+FORGED="eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmYWtlIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDoxODA4MC9yZWFsbXMvbXlyZWFsbSJ9.invalid"
 
 if [ -n "$ADMIN_TOKEN" ]; then
   HEADER=$(echo "$ADMIN_TOKEN" | cut -d. -f1)

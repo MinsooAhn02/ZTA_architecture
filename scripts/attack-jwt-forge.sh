@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:18080}"
 REALM="${REALM:-myrealm}"
 CLIENT_ID="${CLIENT_ID:-zta-client}"
 CLIENT_SECRET="${CLIENT_SECRET:-zta-secret}"
