@@ -9,14 +9,19 @@
 \usepackage{float}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{multirow}
+\usepackage{enumitem}
+\raggedbottom
 
 \title{Zero Trust Architecture Sandbox: Implementation and Evaluation Report}
 
-\author{Minsoo Ahn\\
+\author{\IEEEauthorblockN{Minsoo Ahn}
+\IEEEauthorblockA{CSE 487 T92\\
 Student ID: 114743792\\
-CSE 487 T92\\
 Instructor: Antonino Mione\\
-Date: May 11, 2026}
+May 11, 2026}}
 
 \begin{document}
 \maketitle
@@ -24,10 +29,10 @@ Date: May 11, 2026}
 \begin{abstract}
 This report describes a hands-on implementation of a Zero Trust Architecture (ZTA)
 using an open-source stack on a local Kubernetes cluster. The system follows NIST SP
-800-207 principles with Istio as the policy enforcement point, OPA as the policy
+800-207~\cite{nist} principles with Istio as the policy enforcement point, OPA as the policy
 decision point, and Keycloak as the identity provider. Five security scenarios are
 validated: lateral movement defense, JWT forgery and tampering, context-based access
-control, JWT claim-based authorization, and device posture gating. All tests pass in
+control, JWT claim-based authorization, and device posture gating. All 18 test cases pass in
 end-to-end runs, and evidence is captured through automated test logs and OPA decision
 logs. Performance measurements show an average latency increase of 1.53 ms and a 22.3\%
 throughput reduction under single-connection load tests. The results demonstrate that
@@ -41,10 +46,11 @@ Modern breaches commonly follow a two-stage pattern: credential theft followed b
 lateral movement inside the network. Traditional perimeter controls such as firewalls
 and VPNs can block unauthenticated ingress but provide limited visibility and control
 for east-west traffic between workloads. Zero Trust Architecture changes the assumption
-from ``trusted internal'' to ``verify every request.'' This project implements a ZTA
+from ``trusted internal'' to ``verify every request''~\cite{nist,beyondcorp}. This project implements a ZTA
 sandbox to validate that request-level identity and policy enforcement can block a set
 of representative attacks while remaining practical to operate on a small cluster.
 
+\vspace{4pt}
 \section{Methodology}
 \subsection{Environment and Stack}
 The sandbox runs on Minikube with Istio 1.28.3 for service mesh enforcement, OPA for
@@ -54,38 +60,15 @@ AuthorizationPolicy and PeerAuthentication resources, and Rego policies in OPA.
 
 \subsection{Policy Design}
 Four independent layers enforce access decisions:
-\begin{itemize}
+\begin{itemize}[noitemsep, topsep=3pt, parsep=0pt, partopsep=0pt]
   \item mTLS workload identity for pod-to-pod traffic.
   \item SPIFFE allowlist to restrict backend access to the frontend service account.
   \item JWT signature validation using Keycloak JWKS.
   \item Context-aware authorization in OPA (role, method, path, posture).
 \end{itemize}
+Figure~\ref{fig:arch} illustrates both the north-south and east-west enforcement flows.
 
-\subsection{Threat Model and Scenarios}
-Five scenarios are designed to represent realistic attack paths:
-(A) lateral movement, (B) JWT forgery and tampering, (C) context-based abuse,
-(D) role escalation through claims, and (E) device posture risk. Each scenario is
-mapped to a corresponding policy control and a reproducible test command.
-
-\subsection{Scenario Selection Rationale}
-The scenarios were chosen to reflect common attacker behavior observed in real
-microservice environments and to map cleanly to NIST SP 800-207 tenets. They are
-representative, repeatable on a local cluster, and span both north-south and east-west
-traffic paths without depending on rare or exotic conditions.
-\begin{itemize}
-  \item A: Lateral movement is a dominant post-compromise behavior and validates
-  workload identity plus service-to-service authorization.
-  \item B: Forged or tampered JWTs are realistic API abuses and test cryptographic
-  authentication at the infrastructure layer.
-  \item C: Context abuse (method/path) reflects over-privileged access in practice
-  and demonstrates fine-grained authorization beyond identity.
-  \item D: Claim-based authorization closes header spoofing and validates signed
-  identity as the policy source of truth.
-  \item E: Device posture models access from risky or unmanaged devices, showing that
-  identity alone is not sufficient.
-\end{itemize}
-
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \begin{tikzpicture}[
     node distance=4mm and 5mm,
@@ -112,21 +95,48 @@ traffic paths without depending on rare or exotic conditions.
     \draw[->] (mtls) -- (spiffe);
     \draw[->] (spiffe) -- (backend2);
   \end{tikzpicture}
-  \caption{Request flow and enforcement layers.}
+  \caption{Request flow and enforcement layers. Top row: north-south path
+(Client $\to$ Envoy JWT verify $\to$ OPA $\to$ Frontend $\to$ Backend).
+Bottom row: east-west path (Frontend $\to$ mTLS SVID $\to$ SPIFFE Allowlist $\to$ Backend).}
   \label{fig:arch}
 \end{figure}
 
+\subsection{Threat Model and Scenarios}
+Five scenarios are designed to represent realistic attack paths:
+(A) lateral movement, (B) JWT forgery and tampering, (C) context-based abuse,
+(D) role escalation through claims, and (E) device posture risk. Each scenario is
+mapped to a corresponding policy control and a reproducible test command.
+
+\subsection{Scenario Selection Rationale}
+The scenarios were chosen to reflect common attacker behavior observed in real
+microservice environments and to map cleanly to NIST SP 800-207 tenets. They are
+representative, repeatable on a local cluster, and span both north-south and east-west
+traffic paths without depending on rare or exotic conditions.
+\begin{itemize}[noitemsep, topsep=3pt, parsep=0pt, partopsep=0pt]
+  \item A: Lateral movement is a dominant post-compromise behavior and validates
+  workload identity plus service-to-service authorization.
+  \item B: Forged or tampered JWTs are realistic API abuses and test cryptographic
+  authentication at the infrastructure layer.
+  \item C: Context abuse (method/path) reflects over-privileged access in practice
+  and demonstrates fine-grained authorization beyond identity.
+  \item D: Claim-based authorization closes header spoofing and validates signed
+  identity as the policy source of truth.
+  \item E: Device posture models access from risky or unmanaged devices, showing that
+  identity alone is not sufficient.
+\end{itemize}
+
+\vspace{4pt}
 \section{Results}
 \subsection{Scenario Outcomes}
-All 20 test cases pass in the final validation run (see evidence/test-results.txt).
+All 18 test cases pass in the final validation run.
 Table~\ref{tab:scenarios} summarizes the scenario outcomes.
 
-\begin{table}[t]
+\begin{table}[H]
 \caption{Security scenario outcomes}
 \label{tab:scenarios}
 \centering
 \footnotesize
-\begin{tabularx}{\columnwidth}{l X l}
+\begin{tabularx}{\columnwidth}{l >{\raggedright\arraybackslash}X l}
 \toprule
 Scenario & Threat and control & Result \\
 \midrule
@@ -145,138 +155,98 @@ confirms unauthenticated requests are denied, while a demo header allows access 
 illustrate why header-only identity is weak. For east-west movement, a rogue pod
 without a sidecar fails mTLS, and a pod with the wrong ServiceAccount is denied by the
 SPIFFE allowlist. Direct pod IP access is also blocked. These tests validate workload
-identity and service-to-service authorization as separate gates (Table~\ref{tab:scenario-a}).
-
-\begin{table}[t]
-\caption{Scenario A test matrix}
-\label{tab:scenario-a}
-\centering
-\footnotesize
-\begin{tabularx}{\columnwidth}{l X c c}
-\toprule
-Case & Request signals & Expect & Result \\
-\midrule
-A-NS-1 & GET \texttt{/api/admin}, no identity & 403 & 403 \\
-A-NS-2 & GET \texttt{/api/admin}, header \texttt{role:admin} & 200 & 200 \\
-A-EW-1 & Rogue pod without sidecar to backend & 403/000/503 & 403 \\
-A-EW-2 & Wrong ServiceAccount to backend & 403 & 403 \\
-A-EW-3 & Rogue pod to backend pod IP:8080 & 403/000/503 & 503 \\
-\bottomrule
-\end{tabularx}
-\end{table}
+identity and service-to-service authorization as separate gates.
 
 \textbf{B: JWT forgery and tampering.} A forged JWT is rejected because no valid
 principal is established at the mesh layer. A tampered payload with the original
 signature fails cryptographic verification, returning a 401. A valid Keycloak-issued
-JWT is accepted and passes to OPA for authorization (Table~\ref{tab:scenario-b}).
-
-\begin{table}[t]
-\caption{Scenario B test matrix}
-\label{tab:scenario-b}
-\centering
-\footnotesize
-\begin{tabularx}{\columnwidth}{l X c c}
-\toprule
-Case & Request signals & Expect & Result \\
-\midrule
-B-1 & Forged JWT to \texttt{/api/admin} & 403 & 403 \\
-B-2 & Tampered real JWT to \texttt{/api/admin} & 401 & 401 \\
-B-4 & Valid Keycloak JWT to \texttt{/api/admin} & 200 & 200 \\
-\bottomrule
-\end{tabularx}
-\end{table}
+JWT is accepted and passes to OPA for authorization.
 
 \textbf{C: Context-based access control.} This scenario demonstrates that identity is
 not enough: role, method, and path must be consistent. A user role can read
 \texttt{/api/data} but is denied on \texttt{/api/admin} and all write operations, while
 an admin role can write. This uses header-based roles as a deliberate baseline for
-contrast with Scenario D (Table~\ref{tab:scenario-c}). In the final configuration,
-JWT authentication is still enforced; the header-based rules illustrate why signed
-claims are needed even when a request is authenticated.
-
-\begin{table}[t]
-\caption{Scenario C test matrix}
-\label{tab:scenario-c}
-\centering
-\footnotesize
-\begin{tabularx}{\columnwidth}{l X c c}
-\toprule
-Case & Request signals & Expect & Result \\
-\midrule
-C-1 & \texttt{role:user}, GET \texttt{/api/data} & 200 & 200 \\
-C-2 & \texttt{role:user}, GET \texttt{/api/admin} & 403 & 403 \\
-C-3 & \texttt{role:user}, POST \texttt{/api/write} & 403 & 403 \\
-C-4 & \texttt{role:admin}, POST \texttt{/api/write} & 200 & 200 \\
-\bottomrule
-\end{tabularx}
-\end{table}
+contrast with Scenario D. In the final configuration, JWT authentication is still
+enforced; the header-based rules illustrate why signed claims are needed even when a
+request is authenticated.
 
 \textbf{D: JWT claim authorization.} Authorization is driven by signed claims in the
 JWT. An admin token can access admin endpoints, while a viewer token is limited to
 read-only paths. This closes header spoofing and demonstrates a cryptographically
-bound identity source of truth (Table~\ref{tab:scenario-d}).
-
-\begin{table}[t]
-\caption{Scenario D test matrix}
-\label{tab:scenario-d}
-\centering
-\footnotesize
-\begin{tabularx}{\columnwidth}{l X c c}
-\toprule
-Case & Request signals & Expect & Result \\
-\midrule
-D-1 & Admin JWT, GET \texttt{/api/admin} & 200 & 200 \\
-D-2 & Viewer JWT, GET \texttt{/api/data} & 200 & 200 \\
-D-3 & Viewer JWT, GET \texttt{/api/admin} & 403 & 403 \\
-D-4 & Viewer JWT, POST \texttt{/api/write} & 403 & 403 \\
-\bottomrule
-\end{tabularx}
-\end{table}
+bound identity source of truth.
 
 \textbf{E: Device posture gating.} Even with a valid admin JWT, access is denied when
 the device posture signal indicates risk. The demo uses the \texttt{X-Device-Firewall}
 header to model a health signal and illustrates how posture can be integrated into
-policy decisions (Table~\ref{tab:scenario-e}).
+policy decisions.
 
-\begin{table}[t]
-\caption{Scenario E test matrix}
-\label{tab:scenario-e}
+Full test case results for all scenarios are shown in Table~\ref{tab:allcases}.
+
+\begin{table}[H]
+\caption{Combined test matrix: all scenarios A--E (18 cases)}
+\label{tab:allcases}
 \centering
-\footnotesize
-\begin{tabularx}{\columnwidth}{l X c c}
+\scriptsize
+\begin{tabularx}{\columnwidth}{l l >{\raggedright\arraybackslash}X c c}
 \toprule
-Case & Request signals & Expect & Result \\
+Scenario & Case & Request signals & Expect & Result \\
 \midrule
-E-1 & Admin JWT, \texttt{X-Device-Firewall: enabled} & 200 & 200 \\
-E-2 & Admin JWT, \texttt{X-Device-Firewall: disabled} & 403 & 403 \\
+\multirow{5}{*}{A}
+  & A-NS-1 & GET \texttt{/api/admin}, no identity & 403 & 403 \\
+  & A-NS-2 & GET \texttt{/api/admin}, header \texttt{role:admin} & 200 & 200 \\
+  & A-EW-1 & Rogue pod (no sidecar) to backend service & 403/000/503 & 403 \\
+  & A-EW-2 & Wrong ServiceAccount (\texttt{backend-sa}) to backend & 403 & 403 \\
+  & A-EW-3 & Rogue pod to backend pod IP:8080 & 403/000/503 & 503 \\
+\midrule
+\multirow{3}{*}{B}
+  & B-1 & Forged JWT (invalid signature) to \texttt{/api/admin} & 403 & 403 \\
+  & B-2 & Tampered real JWT payload to \texttt{/api/admin} & 401 & 401 \\
+  & B-3 & Valid Keycloak JWT to \texttt{/api/admin} & 200 & 200 \\
+\midrule
+\multirow{4}{*}{C}
+  & C-1 & \texttt{role:user}, GET \texttt{/api/data} & 200 & 200 \\
+  & C-2 & \texttt{role:user}, GET \texttt{/api/admin} & 403 & 403 \\
+  & C-3 & \texttt{role:user}, POST \texttt{/api/write} & 403 & 403 \\
+  & C-4 & \texttt{role:admin}, POST \texttt{/api/write} & 200 & 200 \\
+\midrule
+\multirow{4}{*}{D}
+  & D-1 & Admin JWT, GET \texttt{/api/admin} & 200 & 200 \\
+  & D-2 & Viewer JWT, GET \texttt{/api/data} & 200 & 200 \\
+  & D-3 & Viewer JWT, GET \texttt{/api/admin} & 403 & 403 \\
+  & D-4 & Viewer JWT, POST \texttt{/api/write} & 403 & 403 \\
+\midrule
+\multirow{2}{*}{E}
+  & E-1 & Admin JWT + \texttt{X-Device-Firewall: enabled} & 200 & 200 \\
+  & E-2 & Admin JWT + \texttt{X-Device-Firewall: disabled} & 403 & 403 \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 \subsection{Operational Evidence}
 OPA decision logs confirm allow and deny outcomes for each scenario, and the automated
-``make test-all'' run provides a consolidated PASS summary. The evidence directory
+\texttt{make test-all} run provides a consolidated PASS summary. The evidence directory
 includes detailed logs for JWT forgery, lateral movement attempts, and device posture
-simulation.
+simulation. Figure~\ref{fig:kiali} shows the Kiali workload graph confirming mTLS
+enforcement across active service paths.
 
 \begin{figure}[H]
   \centering
-  \fbox{\parbox[c][1.0in][c]{0.95\columnwidth}{\centering
-  Placeholder: Kiali topology screenshot}}
-  \caption{Service mesh topology (Kiali).}
+  \includegraphics[width=0.95\columnwidth]{../evidence/screenshots/kiali-topology.png}
+  \caption{Kiali Workload Graph captured during the \texttt{make for\_pdf} test run,
+showing one representative request per scenario (A--E). The mTLS padlock icon on
+the frontend$\to$backend edge confirms STRICT mutual authentication is active.
+Blocked paths (rogue pod, forged JWT) terminate at the ingress and do not appear
+as edges to the backend, illustrating that the enforcement layers are working as
+intended.}
   \label{fig:kiali}
 \end{figure}
 
 \subsection{Performance}
-Performance testing uses Fortio with 200 requests and a single connection. Results are
-shown in Table~\ref{tab:perf}.
+Performance testing uses Fortio with 200 requests and a single connection.
+Table~\ref{tab:perf} summarizes the aggregate overhead relative to a baseline with no
+Istio policies applied.
 
-Table~\ref{tab:policy-cost} provides a supplemental view of per-scenario timing for
-representative allowed and blocked requests. Blocked cases measure policy decision
-cost only (the request is denied before application handling). Allowed cases include
-end-to-end handling, so the two categories should be interpreted separately.
-
-\begin{table}[t]
+\begin{table}[H]
 \caption{Performance impact (200 requests, single connection)}
 \label{tab:perf}
 \centering
@@ -286,41 +256,86 @@ end-to-end handling, so the two categories should be interpreted separately.
 Metric & Baseline & ZTA & Delta \\
 \midrule
 Avg latency & 5.33 ms & 6.86 ms & +1.53 ms (+28.6\%) \\
-QPS & 187.5 & 145.7 & -41.8 (-22.3\%) \\
+QPS & 187.5 & 145.7 & $-$41.8 ($-$22.3\%) \\
 p99 latency & 8.5 ms & 10.5 ms & +2.0 ms (+23.5\%) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{table}[t]
-\caption{Per-scenario latency: allow = end-to-end, block = policy gate only (Fortio, 200 requests)}
+Figure~\ref{fig:perf} visualizes the latency difference between baseline and ZTA.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      ybar=8pt,
+      width=0.88\columnwidth,
+      height=5.0cm,
+      bar width=7pt,
+      enlarge x limits=0.4,
+      ylabel={Latency (ms)},
+      ylabel style={font=\small},
+      symbolic x coords={Avg latency, p99 latency},
+      xtick=data,
+      xticklabel style={font=\small},
+      ymin=0, ymax=14,
+      ytick={0,2,4,6,8,10,12,14},
+      yticklabel style={font=\scriptsize},
+      ymajorgrids=true,
+      grid style={dashed, gray!30},
+      legend style={
+        at={(0.5,-0.18)}, anchor=north, legend columns=2,
+        font=\small, draw=none, fill=none
+      },
+      nodes near coords,
+      nodes near coords align={vertical},
+      every node near coord/.append style={yshift=3pt, font=\scriptsize},
+      nodes near coords style={
+        /pgf/number format/fixed,
+        /pgf/number format/precision=2
+      },
+      axis line style={thin},
+      tick style={thin},
+    ]
+      \addplot[fill=white, draw=black, thick]
+        coordinates {(Avg latency,5.33) (p99 latency,8.50)};
+      \addplot[fill=gray!55, draw=black, thick]
+        coordinates {(Avg latency,6.86) (p99 latency,10.50)};
+      \legend{Baseline, ZTA}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Latency overhead introduced by ZTA policies (Fortio, 200 requests,
+           single connection). QPS: baseline 187.5, ZTA 145.7 ($-$22.3\%).}
+  \label{fig:perf}
+\end{figure}
+
+Table~\ref{tab:policy-cost} breaks down per-scenario timing. Blocked cases measure
+policy-gate cost only (the request is denied before reaching the application), while
+allowed cases include full end-to-end handling; the two categories should be compared
+separately.
+
+\begin{table}[H]
+\caption{Per-scenario latency (Fortio, 200 requests): allow cases are end-to-end; block cases measure policy gate only.}
 \label{tab:policy-cost}
 \centering
 \footnotesize
-\begin{tabularx}{\columnwidth}{l l X r r r}
+\begin{tabularx}{\columnwidth}{l l >{\raggedright\arraybackslash}X r r r}
 \toprule
 Case & Type & Request signal & Avg (ms) & p99 (ms) & Code \\
 \midrule
 A1 & Allow & Admin JWT, GET \texttt{/api/admin} & 5.94 & 7.89 & 200 \\
 A2 & Allow & Viewer JWT, GET \texttt{/api/data} & 6.63 & 8.80 & 200 \\
 A3 & Allow & \texttt{role:user}, GET \texttt{/api/data} & 6.58 & 9.00 & 200 \\
-A4 & Allow & Admin JWT + \texttt{X-Device-Firewall: enabled} & 6.22 & 7.94 & 200 \\
+A4 & Allow & Admin JWT + device firewall enabled & 6.22 & 7.94 & 200 \\
 B1 & Block & No identity, GET \texttt{/api/admin} & 2.02 & 4.00 & 403 \\
 B2 & Block & Forged JWT, GET \texttt{/api/admin} & 2.36 & 5.00 & 403 \\
 B3 & Block & Tampered JWT, GET \texttt{/api/admin} & 2.00 & 4.00 & 401 \\
-B4 & Block & Admin JWT + \texttt{X-Device-Firewall: disabled} & 2.91 & 5.50 & 403 \\
+B4 & Block & Admin JWT + device firewall disabled & 2.91 & 5.50 & 403 \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\begin{figure}[H]
-  \centering
-  \fbox{\parbox[c][1.0in][c]{0.95\columnwidth}{\centering
-  Placeholder: Grafana latency dashboard screenshot}}
-  \caption{Latency and throughput metrics (Grafana).}
-  \label{fig:grafana}
-\end{figure}
-
+\vspace{4pt}
 \section{Discussion}
 \subsection{Security Value vs Traditional Controls}
 The implementation demonstrates that per-request authorization at the infrastructure
@@ -329,20 +344,21 @@ credentials, requests are denied when policy context is violated, and internal l
 movement is blocked by workload identity checks.
 
 \subsection{VPN vs ZTA}
-WireGuard provides low-overhead transport security but does not enforce request-level
-authorization or workload identity. ZTA adds these controls with a measurable overhead,
-so the most practical deployment is layered: VPN for secure entry and ZTA for service
-policy enforcement.
+WireGuard~\cite{wireguard} provides low-overhead transport security but does not enforce
+request-level authorization or workload identity. ZTA adds these controls with a measurable
+overhead, so the most practical deployment is layered: VPN for secure entry and ZTA for
+service policy enforcement.
 
+\vspace{4pt}
 \section{Limitations}
 Device posture is simulated through a client-provided header, and the OPA ext-authz
 channel is not mTLS-encrypted due to sidecar dependency constraints. Header-based role
 rules remain in place to demonstrate weaker access controls (Scenario C) alongside the
 stronger JWT claim path (Scenario D). The scenario set is representative but not
 exhaustive, and ZTA does not eliminate risks from human error, misconfiguration, or
-novel low-level exploits. The environment is local and does not represent production-
-scale latency or throughput.
+novel low-level exploits. The environment is local and does not represent production-scale latency or throughput.
 
+\vspace{4pt}
 \section{Experience and Reflection}
 \subsection{Unexpected Outcomes}
 I expected the implementation to be harder, but the core ZTA flow was manageable once
@@ -350,8 +366,7 @@ the stack was aligned. The most surprising result was performance overhead: the
 latency increase and QPS drop were higher than I anticipated, even in a small test.
 
 \subsection{Implementation Challenges}
-The initial setup and integration of Istio, OPA, and Keycloak was the most time-
-consuming part. JWT verification flow and automated end-to-end tests required careful
+The initial setup and integration of Istio, OPA, and Keycloak was the most time-consuming part. JWT verification flow and automated end-to-end tests required careful
 ordering and debugging. I also spent time looking for missing scenarios and thinking
 about bypasses not captured by the default test set.
 
@@ -370,9 +385,10 @@ easier to absorb, but the dilemma remains. If I extend this work, I want to desi
 more efficient policy path and push enforcement closer to lower-level boundaries so
 that isolation holds even against unexpected paths.
 
+\vspace{4pt}
 \section{Conclusion}
 The sandbox validates that open-source tools can implement a realistic Zero Trust
-Architecture aligned with NIST SP 800-207. The system blocks five representative
+Architecture aligned with NIST SP 800-207~\cite{nist}. The system blocks five representative
 attack scenarios and provides clear audit evidence for each decision. The measured
 performance cost is acceptable for a security-focused environment, and the design
 illustrates how identity, context, and workload trust can replace implicit network
@@ -380,16 +396,16 @@ trust.
 
 \begin{thebibliography}{1}
 \bibitem{nist}
-NIST, ``Zero Trust Architecture,'' SP 800-207, 2020.\newline
-\url{https://csrc.nist.gov/publications/detail/sp/800-207/final}
+S. Rose, O. Borchert, S. Mitchell, and S. Connelly, ``Zero Trust Architecture,''
+National Institute of Standards and Technology, Gaithersburg, MD, NIST SP 800-207, Aug. 2020. [Online]. Available: \url{https://doi.org/10.6028/NIST.SP.800-207}
 
 \bibitem{beyondcorp}
-Google, ``BeyondCorp: A New Approach to Enterprise Security,'' 2014.\newline
-\url{https://research.google/pubs/pub43231/}
+R. Ward and B. Beyer, ``BeyondCorp: A New Approach to Enterprise Security,''
+\textit{;login:}, vol.~39, no.~6, pp.~6--11, Dec. 2014. [Online]. Available: \url{https://research.google/pubs/pub43231/}
 
 \bibitem{wireguard}
-J. A. Donenfeld, ``WireGuard: Next Generation Kernel Network Tunnel,'' 2017.\newline
-\url{https://www.wireguard.com/papers/wireguard.pdf}
+J. A. Donenfeld, ``WireGuard: Next Generation Kernel Network Tunnel,''
+in \textit{Proc. Network and Distributed System Security Symp. (NDSS)}, San Diego, CA, USA, Feb. 2017. [Online]. Available: \url{https://www.wireguard.com/papers/wireguard.pdf}
 \end{thebibliography}
 
 \end{document}

@@ -80,8 +80,8 @@ and east-west paths and map directly to NIST SP 800-207 tenets.
   - `04-added.md`: What was added beyond the original proposal
   - `05-checklist.md`: Implementation and scenario verification status
   - `06-final-report-draft.md`: Final report for submission
-- visualizer/: Web-based security dashboard (server.py — live test runner + pipeline view)
-- Makefile: setup, deployment, test, demo, monitoring, cleanup automation
+- visualizer/: Web-based security dashboard (`server.py`) — live test runner, animated ZTA pipeline graph, 2-column attack detail panel, real-time performance metrics table
+- Makefile: setup, deployment, test, demo, monitoring, cleanup automation. `make view` auto-starts cluster if needed and wraps everything in WSL for Windows PowerShell compatibility.
 - (Istio binary is auto-downloaded by Makefile during `make step1` if not already present)
 
 ## ZTA Security Dashboard (Visualizer)
@@ -90,61 +90,72 @@ A browser-based control panel that runs directly from WSL — no extra dependenc
 
 **Prerequisites:** Python 3 (standard library only — no pip installs required).
 
-**How to run (WSL Ubuntu terminal):**
+**How to run:**
 
 ```bash
-# From the project root directory in WSL:
-make view        # short alias (recommended)
+# From the project root — works from PowerShell or WSL:
+make view        # recommended (auto-starts cluster if not ready)
 # or
 make visualizer
-# or
+# or (inside WSL directly):
 python3 visualizer/server.py
 
-# Then open in browser (Windows host):
+# Then open in browser:
 #   http://localhost:5001
 ```
 
-> **Important:** run from WSL, not PowerShell. The server shells out to `make`
-> for live command execution — `make` is only available inside WSL.
+> **`make view` is self-contained.** It checks whether the minikube cluster and
+> `frontend` deployment are already running. If they are, it only restarts port-forwards.
+> If not, it runs `make all` (full cluster setup) automatically before starting the server.
+> No manual pre-flight required.
 
-**Stop:** `Ctrl+C` in the WSL terminal.
+> **Windows note:** `make view` wraps the command in `wsl bash -c '...'`, so it can
+> be called from PowerShell directly. The Python server and all `make` targets run
+> inside WSL automatically.
+
+**Stop:** `Ctrl+C` in the terminal.
 
 **Layout:**
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│  Header: ZTA Security Dashboard  |  stats: Total / Pass / Fail       │
-│          service links: Keycloak · Grafana · Kiali                   │
-├─────────────────────┬────────────────────────────────────────────────┤
-│  LEFT               │  RIGHT                                         │
-│  Scenario cards     │  ZTA Security Pipeline (node animation)        │
-│  ─────────────────  │  ─────────────────────────────────────────     │
-│  Tabs: All / A / B  │  Request Journey (step-by-step flow)           │
-│        / C / D / E  │  ─────────────────────────────────────────     │
-│                     │  Why it was blocked (security insight)         │
-│  Click a card to:   │  ─────────────────────────────────────────     │
-│  • animate pipeline │  Defense layer + make target                   │
-│  • stream make log  │                                                │
-├─────────────────────┴────────────────────────────────────────────────┤
-│  Terminal: live make output (SSE stream from WSL)                    │
-├──────────────────────────────────────────────────────────────────────┤
-│  Bottom bar: step1 · step2 · step3 · step4 · test-all · ports · ...  │
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────┐
+│  ⬡ ZTA Security Dashboard  |  Minsoo Ahn · NIST SP 800-207 · Keycloak+Istio+OPA · 18 Scenarios  │  18 Total  0 Pass  │  Keycloak Grafana Kiali ↓Report  │
+├────┬──────────────┬─────────────────────────────────────────┬──────────────────┤
+│ ▲  │              │                                         │                  │
+│All │  Scenario    │   ZTA Security Pipeline (node graph)    │  Request         │
+│ A  │  Cards       │   North-South or East-West topology     │  Journey         │
+│ B  │  (280 px)    │   Nodes animate green/red on test run   │  (step-by-step   │
+│ C  │              │   No scroll — all nodes visible         │   flow list)     │
+│ D  │  Click →     │                                         │                  │
+│ E  │  selects &   ├─────────────────────────────────────────┴──────────────────┤
+│    │  runs test   │  Attack Detail & Defense  (2-column, full width)           │
+│    │              │  Left: ID · title · signals · verdict · block reason        │
+│    │              │  Right: "Why It Is Blocked" insight paragraph (14px)        │
+├────┴──────────────┴──────────────────────────────────────────────────────────┤
+│  Terminal (3/8 width)    │  Run History & Performance (5/8 width)             │
+│  Live make output        │  Table: # · Scenario · Cat · Pipeline ·            │
+│  streamed via SSE        │  Expect HTTP · Actual HTTP · Match · Block Layer ·  │
+│  from WSL                │  Verdict · Duration · Exit Code · Time             │
+├──────────────────────────┴──────────────────────────────────────────────────┤
+│  Bottom bar: test-all · jwt-refresh · opa-logs · cluster                     │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Panels:**
 
-| Area                  | What it does                                                                                                                                                                                                               |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Scenario cards (left) | 18 test cards (A–E), filterable by scenario group. Each card shows title, description, request signals (method / path / identity / role), and a PASS / FAIL / running badge. Click to select.                              |
-| ZTA Security Pipeline | Animated node graph for north-south (Client → Istio JWT → Istio DENY → OPA → App) and east-west (Rogue Pod → mTLS → SPIFFE → Backend) flows. Nodes light up green (passed) or red/pulsing (blocked) as the scenario plays. |
-| Request Journey       | Step-by-step list showing exactly which layer passed the request and which one blocked it, with the specific policy rule shown inline at the block point.                                                                  |
-| Why it was blocked    | Per-scenario explanation of the underlying ZTA principle — what the attacker tried, which control stops it, and why it matters.                                                                                            |
-| Report tab            | Shows a Download PDF button for `research_report.pdf`. Click to download — the file is not displayed inline. Button is disabled if the file is not present in the project root.                                           |
-| Terminal (bottom)     | Live `make` output streamed via SSE from WSL. Starts automatically when a card is clicked; also triggered by the bottom workflow buttons.                                                                                  |
-| Workflow buttons      | One-click runners for `step1` / `step2` / `step3` / `step4` / `test-all` / `ports` / `status` / `jwt-refresh` / `opa-logs` / `add-viewer`.                                                                                 |
+| Area | What it does |
+|------|-------------|
+| **Vertical category tabs** (far left, 52 px) | Filter cards by scenario group: All / A / B / C / D / E. Click to filter; active group highlighted with blue left-border. |
+| **Scenario cards** (280 px) | 18 test cards. Each shows scenario ID, title, description, request signals (method / path / identity / role / posture), and a PASS / FAIL / running badge. Click a card to select it, animate the graph, and stream the make output live. |
+| **ZTA Security Pipeline** (graph, flex 4) | Animated node topology — North-South path: Client → Istio JWT Auth → Istio DENY → OPA Policy → App; East-West path: Rogue Pod → mTLS STRICT → SPIFFE Allowlist → Backend. Nodes animate green (passed) or red+pulsing (blocked). No scrollbar — all nodes visible at once. |
+| **Request Journey** (right of graph, flex 2) | Step-by-step list: each node in the flow gets a passed / BLOCKED HERE / skipped badge. The block point shows the exact policy rule that fired. |
+| **Attack Detail & Defense** (bottom half of right panel, full width) | 2-column layout. **Left:** scenario ID + title, description, signal tags, BLOCKED / ALLOWED verdict, defense layer badge, pipeline label (NS/EW), block reason in monospace box, make target. **Right:** "Why It Is Blocked / Why It Is Allowed" — full insight paragraph at 14 px line-height 1.8. |
+| **Terminal** (bottom-left, 3/8 width) | Live `make` output streamed via SSE from WSL. Color-coded: green for PASS lines, red for FAIL, yellow for EXPECT/RESULT, white for headers. Auto-scrolls. |
+| **Run History & Performance** (bottom-right, 5/8 width) | Real-time table populated after each test run. Columns: **#, Scenario, Category, Pipeline, Expected HTTP, Actual HTTP, Match ✓/✗, Block Layer, Verdict, Duration, Exit Code, Time**. HTTP codes parsed live from EXPECT:/RESULT: SSE lines; pipeline and block layer sourced from scenario metadata. Sticky header, 13 px font. |
+| **Bottom bar** | Quick-run buttons: `test-all`, `jwt-refresh`, `opa-logs`, `cluster` (kubectl pod/policy dump). |
+| **Header** | Single inline banner: hex icon · title · pipe · meta info (author, NIST ref, tools, scenario count) · pass/total counters · service links (Keycloak, Grafana, Kiali, Report PDF download). |
 
-Requires WSL — the server shells out to `make` for live command execution.
+Requires WSL — the Python server shells out to `make` for live command execution.
 
 ---
 
