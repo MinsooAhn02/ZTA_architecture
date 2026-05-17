@@ -33,8 +33,8 @@ using an open-source stack on a local Kubernetes cluster. The system follows NIS
 decision point, and Keycloak as the identity provider. Five security scenarios are
 validated: lateral movement defense, JWT forgery and tampering, context-based access
 control, JWT claim-based authorization, and device posture gating. All 18 test cases pass in
-end-to-end runs, and evidence is captured through automated test logs and OPA decision
-logs. Performance measurements show an average latency increase of 1.53 ms and a 22.3\%
+end-to-end runs, and evidence is captured through automated \texttt{make test-all} logs, OPA decision
+logs, and a Kiali topology graph. Performance measurements show an average latency increase of 1.53 ms and a 22.3\%
 throughput reduction under single-connection load tests. The results demonstrate that
 ZTA enforces per-request, context-aware authorization and workload identity controls
 that traditional firewalls and VPNs do not provide, while introducing a measurable but
@@ -163,35 +163,33 @@ A (E-W) & \texttt{source.principal} = \texttt{frontend-sa} $\wedge$ method = GET
 C & role header = ``user'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
 D (admin) & \texttt{jwt.realm\_access.roles} $\ni$ ``admin'' $\wedge$ posture\_ok & allow \\
 D (viewer) & \texttt{jwt.realm\_access.roles} $\ni$ ``viewer'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
-E (gate) & \texttt{X-Device-Firewall} $\in$ \{$\emptyset$,\ ``enabled''\} $\Rightarrow$ posture\_ok = true & gate \\
+E & \texttt{jwt.realm\_access.roles} $\ni$ ``admin'' $\wedge$ \texttt{X-Device-Firewall} $\in$ \{$\emptyset$,\ ``enabled''\} & allow \\
 Default & otherwise & deny \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
+\subsection{Architectural Topology Constraints}
+\label{sec:topo}
+The OPA ext-authz channel operates over plaintext gRPC on port 9191 rather than mTLS.
+This is a deliberate architectural constraint: injecting an Envoy sidecar into the OPA pod
+would create a circular authorization dependency. Every Envoy sidecar in the mesh dispatches
+a \texttt{CheckRequest} to OPA before forwarding an application request. If OPA's pod itself
+carried an injected sidecar, that sidecar's inbound filter chain would intercept the incoming
+\texttt{CheckRequest} and---following the same ext-authz filter configuration---would issue a
+new \texttt{CheckRequest} to OPA to authorize the original authorization request. This forms
+an infinite loop: Envoy $\to$ OPA $\to$ (OPA's own Envoy intercepts) $\to$ OPA $\to \cdots$.
+OPA must therefore reside outside the sidecar mesh. The plaintext channel is bounded to
+intra-cluster traffic by a Kubernetes NetworkPolicy (\texttt{opa-network-policy.yaml}) that
+restricts port 9191 to mesh-internal peers only.
+
 \vspace{4pt}
 \section{Results}
 \subsection{Scenario Outcomes}
-All 18 test cases pass in the final validation run.
-Table~\ref{tab:scenarios} summarizes the scenario outcomes.
-
-\begin{table}[!t]
-\caption{Security scenario outcomes}
-\label{tab:scenarios}
-\centering
-\footnotesize
-\begin{tabularx}{\columnwidth}{l >{\raggedright\arraybackslash}X l}
-\toprule
-Scenario & Threat and control & Result \\
-\midrule
-A & Lateral movement blocked by mTLS and SPIFFE allowlist & Blocked \\
-B & Forged or tampered JWT rejected by JWKS verification & Blocked \\
-C & Role + method + path enforced in OPA policy & Enforced \\
-D & JWT claim-based authorization with Keycloak + OPA & Enforced \\
-E & Device posture gate via policy condition & Enforced \\
-\bottomrule
-\end{tabularx}
-\end{table}
+All 18 test cases pass in the final validation run: Scenarios A and B produce blocked or
+rejected responses at the enforcement layer (mTLS/SPIFFE and JWKS verification respectively);
+Scenarios C, D, and E enforce context-aware authorization over authenticated requests.
+Detailed per-case results are shown in Table~\ref{tab:allcases}.
 
 \subsection{Scenario Details}
 \textbf{A: Lateral movement (north-south and east-west).} The north-south baseline
@@ -223,8 +221,6 @@ bound identity source of truth.
 the device posture signal indicates risk. The demo uses the \texttt{X-Device-Firewall}
 header to model a health signal and illustrates how posture can be integrated into
 policy decisions.
-
-Full test case results for all scenarios are shown in Table~\ref{tab:allcases}.
 
 \begin{table}[!t]
 \caption{Combined test matrix: all scenarios A--E (18 cases)}
@@ -294,26 +290,10 @@ runs inside Docker Desktop on WSL2, where CPU resources are shared with the host
 single-connection sequential load avoids throttling artifacts that would otherwise
 conflate authorization latency with resource contention. The throughput figures therefore
 represent sequential-request capacity rather than peak concurrency.
-Table~\ref{tab:perf} summarizes the aggregate overhead relative to a baseline with no
-Istio policies applied.
-
-\begin{table}[!t]
-\caption{Performance impact (200 requests, single connection)}
-\label{tab:perf}
-\centering
-\footnotesize
-\begin{tabular}{lccc}
-\toprule
-Metric & Baseline & ZTA & Delta \\
-\midrule
-Avg latency & 5.33 ms & 6.86 ms & +1.53 ms (+28.6\%) \\
-QPS & 187.5 & 145.7 & $-$41.8 ($-$22.3\%) \\
-p99 latency & 8.5 ms & 10.5 ms & +2.0 ms (+23.5\%) \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Figure~\ref{fig:perf} visualizes the latency difference between baseline and ZTA.
+Relative to a baseline with no Istio policies applied, ZTA adds 1.53\,ms to average
+latency (5.33\,ms $\to$ 6.86\,ms, $+$28.6\%), reduces QPS from 187.5 to 145.7
+($-$22.3\%), and increases p99 latency from 8.5\,ms to 10.5\,ms ($+$23.5\%).
+Figure~\ref{fig:perf} visualizes the latency comparison.
 
 \begin{figure}[!t]
   \centering
@@ -355,18 +335,25 @@ Figure~\ref{fig:perf} visualizes the latency difference between baseline and ZTA
       \legend{Baseline, ZTA}
     \end{axis}
   \end{tikzpicture}
-  \caption{Latency overhead introduced by ZTA policies (Fortio, 200 requests,
-           single connection). QPS: baseline 187.5, ZTA 145.7 ($-$22.3\%).}
+  \caption{Latency overhead introduced by ZTA policies (Fortio, 200\,req,
+           single connection). Baseline avg 5.33\,ms, ZTA avg 6.86\,ms;
+           QPS drop: 187.5 $\to$ 145.7 ($-$22.3\%).}
   \label{fig:perf}
 \end{figure}
 
 Table~\ref{tab:policy-cost} breaks down per-scenario timing. Blocked cases measure
 policy-gate cost only (the request is denied before reaching the application), while
 allowed cases include full end-to-end handling; the two categories should be compared
-separately.
+separately. Blocked requests average 2.32 ms versus 6.34 ms for allowed end-to-end
+requests---a 2.7$\times$ difference---demonstrating that early policy gating terminates
+invalid requests before application processing, reducing per-denied-request latency
+by 63.4\% relative to a fully handled request.
 
 \begin{table}[!t]
-\caption{Per-scenario latency (Fortio, 200 requests): allow cases are end-to-end; block cases measure policy gate only.}
+\caption{Per-scenario latency (Fortio, 200 requests): allow cases are end-to-end;
+block cases measure policy gate only. Cases A1--A4 are representative allow paths;
+B1--B4 are representative block paths. Labels are independent of the scenario matrix
+in Table~\ref{tab:allcases}.}
 \label{tab:policy-cost}
 \centering
 \footnotesize
@@ -402,24 +389,13 @@ service policy enforcement.
 
 \vspace{4pt}
 \section{Limitations}
-Device posture is simulated through a client-provided header, and the OPA ext-authz
-channel operates over plaintext gRPC on port 9191 rather than mTLS. This is a deliberate
-architectural constraint: injecting an Envoy sidecar into the OPA pod would create a
-circular authorization dependency. Every Envoy sidecar in the mesh dispatches a
-\texttt{CheckRequest} to OPA before forwarding an application request. If OPA's pod
-itself carried an injected sidecar, that sidecar's inbound filter chain would intercept
-the incoming \texttt{CheckRequest} and—following the same ext-authz filter configuration—
-would issue a new \texttt{CheckRequest} to OPA to authorize the original authorization
-request. This forms an infinite loop: Envoy $\to$ OPA $\to$ (OPA's own Envoy intercepts)
-$\to$ OPA $\to \cdots$. OPA must therefore reside outside the sidecar mesh. The
-plaintext channel is bounded to intra-cluster traffic by a Kubernetes NetworkPolicy
-(\texttt{opa-network-policy.yaml}) that restricts port 9191 to mesh-internal peers only.
-Header-based role rules remain in place to demonstrate weaker access controls (Scenario C)
-alongside the stronger JWT claim path (Scenario D). The scenario set is representative
-but not exhaustive, and ZTA does not eliminate risks from human error, misconfiguration,
-or novel low-level exploits. Sequential-connection load tests do not capture behavior
-under concurrent request pressure. The environment is local and does not represent
-production-scale latency or throughput.
+Device posture is simulated through a client-provided header rather than a verified
+endpoint-compliance signal. The OPA ext-authz channel operates over plaintext gRPC;
+the architectural reason and the mitigating NetworkPolicy are described in
+Section~\ref{sec:topo}. Sequential-connection load tests do not capture behavior under
+concurrent request pressure. The environment runs on Minikube inside WSL2, where CPU
+and memory are shared with the host OS, so absolute throughput figures do not represent
+production-scale capacity.
 
 \vspace{4pt}
 \section{Experience and Reflection}

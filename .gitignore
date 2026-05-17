@@ -7,4 +7,5 @@ install files/
 __pycache__/
 *.pyc
 *.log
+*.aux
 CLAUDE.md
