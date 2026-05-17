@@ -40,7 +40,8 @@ KEYCLOAK_REALM := myrealm
 KEYCLOAK_URL   := http://localhost:18080
 TEST_SUMMARY_FILE := .test-summary.log
 
-.PHONY: all help status test-all clean \
+.PHONY: for_pdf \
+        all help status test-all clean \
         setup step1 step2 step3 step4 \
         minikube-start minikube-stop \
         istio-install istio-addons \
@@ -62,7 +63,7 @@ TEST_SUMMARY_FILE := .test-summary.log
         ports ports-win ensure-ports port-keycloak port-kiali port-grafana ports-stop \
 	dashboard grafana logs logs-opa logs-frontend logs-backend logs-keycloak logs-pretty \
         clean-all restart \
-	visualizer view viz
+	visualizer view viz _viz-inner
 
 # ============================================================
 #  Quick Start Commands
@@ -1287,6 +1288,67 @@ restart:
 #  Visualizer (ZTA Security Dashboard)
 # ============================================================
 visualizer view viz:
+	@if command -v wsl >/dev/null 2>&1; then \
+	  wsl bash -c 'cd /mnt/c/Users/dksal/zta-project && make --no-print-directory _viz-inner'; \
+	else \
+	  $(MAKE) --no-print-directory _viz-inner; \
+	fi
+
+_viz-inner:
+	@echo ">>> ZTA Security Dashboard"
+	@if minikube status --format="{{.Host}}" 2>/dev/null | grep -q "Running" && \
+	    kubectl get deployment frontend --no-headers 2>/dev/null | grep -q "frontend"; then \
+	  echo "    Cluster already running — ensuring port-forwards..."; \
+	  $(MAKE) --no-print-directory ensure-ports; \
+	else \
+	  echo "    Cluster not ready — running full setup first (this may take a few minutes)..."; \
+	  $(MAKE) --no-print-directory all; \
+	fi
+	@fuser -k 5001/tcp 2>/dev/null || true
+	@sleep 0.3
+	@echo ""
 	@echo ">>> Starting ZTA Security Dashboard on http://localhost:5001"
 	@echo "    (Ctrl+C to stop)"
 	@python3 visualizer/server.py
+
+# ============================================================
+#  PDF Evidence: one representative test per scenario (A~E)
+#  Usage: make for_pdf
+#  → Clears Prometheus history, runs A/B/C/D/E representative
+#    tests, then prompts you to screenshot Kiali.
+# ============================================================
+for_pdf: ensure-ports jwt-refresh setup-keycloak-viewer
+	@echo ""
+	@echo "=============================================================="
+	@echo "  for_pdf: clearing Prometheus and running A~E (1 test each)"
+	@echo "=============================================================="
+	@echo ""
+	@echo ">>> [1/7] Restarting Prometheus to clear traffic history..."
+	@kubectl rollout restart deployment/prometheus -n istio-system
+	@kubectl rollout status deployment/prometheus -n istio-system --timeout=60s
+	@echo ""
+	@echo ">>> [2/7] Scenario A — lateral movement (rogue pod -> backend)"
+	@$(MAKE) --no-print-directory test-lateral-block || true
+	@echo ""
+	@echo ">>> [3/7] Scenario B — JWT forgery (forged token -> frontend)"
+	@$(MAKE) --no-print-directory test-fake || true
+	@echo ""
+	@echo ">>> [4/7] Scenario C — context access (role:user -> /api/admin)"
+	@$(MAKE) --no-print-directory test-context-user-admin || true
+	@echo ""
+	@echo ">>> [5/7] Scenario D — role escalation (viewer JWT -> /api/admin)"
+	@$(MAKE) --no-print-directory test-jwt-viewer-admin || true
+	@echo ""
+	@echo ">>> [6/7] Scenario E — device posture (admin JWT + firewall=disabled)"
+	@$(MAKE) --no-print-directory test-posture-block || true
+	@echo ""
+	@echo ">>> [6.5/7] Allow pass — valid JWT end-to-end (generates frontend->backend mTLS edge)"
+	@$(MAKE) --no-print-directory test-jwt-auto || true
+	@echo "    Waiting 20s for Prometheus to scrape mTLS telemetry..."
+	@sleep 20
+	@echo ""
+	@echo ">>> [7/7] Done. Open Kiali and screenshot:"
+	@echo "    http://localhost:20000"
+	@echo "    Graph -> Namespace: default -> Time range: Last 1m"
+	@echo "    Save as: evidence/screenshots/kiali-topology.png"
+	@echo ""
