@@ -8,34 +8,39 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Policy Design}{1}{}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Request flow and enforcement layers. Top row: north-south path (Client $\to $ Envoy JWT verify $\to $ OPA $\to $ Frontend $\to $ Backend). Bottom row: east-west path (Frontend $\to $ mTLS SVID $\to $ SPIFFE Allowlist $\to $ Backend).}}{1}{}\protected@file@percent }
 \newlabel{fig:arch}{{1}{1}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Threat model: STRIDE mapping and attacker profiles per scenario}}{1}{}\protected@file@percent }
+\newlabel{tab:stride}{{I}{1}{}{}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Threat Model and Scenarios}{1}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Scenario Selection Rationale}{1}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces OPA Rego allow rules (simplified)}}{2}{}\protected@file@percent }
+\newlabel{tab:rego}{{II}{2}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Security scenario outcomes}}{2}{}\protected@file@percent }
+\newlabel{tab:scenarios}{{III}{2}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}Authorization Policy Logic}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {III}Results}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Scenario Outcomes}{2}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Security scenario outcomes}}{2}{}\protected@file@percent }
-\newlabel{tab:scenarios}{{I}{2}{}{}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Scenario Details}{2}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Combined test matrix: all scenarios A--E (18 cases)}}{2}{}\protected@file@percent }
-\newlabel{tab:allcases}{{II}{2}{}{}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Operational Evidence}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Performance}{2}{}\protected@file@percent }
 \citation{wireguard}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Kiali Workload Graph captured during the \texttt  {make for\_pdf} test run, showing one representative request per scenario (A--E). The mTLS padlock icon on the frontend$\to $backend edge confirms STRICT mutual authentication is active. Blocked paths (rogue pod, forged JWT) terminate at the ingress and do not appear as edges to the backend, illustrating that the enforcement layers are working as intended.}}{3}{}\protected@file@percent }
-\newlabel{fig:kiali}{{2}{3}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Performance}{3}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Performance impact (200 requests, single connection)}}{3}{}\protected@file@percent }
-\newlabel{tab:perf}{{III}{3}{}{}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Latency overhead introduced by ZTA policies (Fortio, 200 requests, single connection). QPS: baseline 187.5, ZTA 145.7 ($-$22.3\%).}}{3}{}\protected@file@percent }
-\newlabel{fig:perf}{{3}{3}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Per-scenario latency (Fortio, 200 requests): allow cases are end-to-end; block cases measure policy gate only.}}{3}{}\protected@file@percent }
-\newlabel{tab:policy-cost}{{IV}{3}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Combined test matrix: all scenarios A--E (18 cases)}}{3}{}\protected@file@percent }
+\newlabel{tab:allcases}{{IV}{3}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Performance impact (200 requests, single connection)}}{3}{}\protected@file@percent }
+\newlabel{tab:perf}{{V}{3}{}{}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {IV}Discussion}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Security Value vs Traditional Controls}{3}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Kiali Workload Graph captured during the \texttt  {make for\_pdf} test run, showing one representative request per scenario (A--E). The mTLS padlock icon on the frontend$\to $backend edge confirms STRICT mutual authentication is active. Blocked paths (rogue pod, forged JWT) terminate at the ingress and do not appear as edges to the backend, illustrating that the enforcement layers are working as intended.}}{3}{}\protected@file@percent }
+\newlabel{fig:kiali}{{2}{3}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Latency overhead introduced by ZTA policies (Fortio, 200 requests, single connection). QPS: baseline 187.5, ZTA 145.7 ($-$22.3\%).}}{3}{}\protected@file@percent }
+\newlabel{fig:perf}{{3}{3}{}{}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}VPN vs ZTA}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {V}Limitations}{3}{}\protected@file@percent }
 \citation{nist}
 \bibcite{nist}{1}
 \bibcite{beyondcorp}{2}
 \bibcite{wireguard}{3}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Per-scenario latency (Fortio, 200 requests): allow cases are end-to-end; block cases measure policy gate only.}}{4}{}\protected@file@percent }
+\newlabel{tab:policy-cost}{{VI}{4}{}{}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {VI}Experience and Reflection}{4}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Unexpected Outcomes}{4}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Implementation Challenges}{4}{}\protected@file@percent }

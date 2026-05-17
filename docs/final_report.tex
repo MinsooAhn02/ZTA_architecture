@@ -68,7 +68,7 @@ Four independent layers enforce access decisions:
 \end{itemize}
 Figure~\ref{fig:arch} illustrates both the north-south and east-west enforcement flows.
 
-\begin{figure}[H]
+\begin{figure}[!t]
   \centering
   \begin{tikzpicture}[
     node distance=4mm and 5mm,
@@ -102,10 +102,27 @@ Bottom row: east-west path (Frontend $\to$ mTLS SVID $\to$ SPIFFE Allowlist $\to
 \end{figure}
 
 \subsection{Threat Model and Scenarios}
-Five scenarios are designed to represent realistic attack paths:
-(A) lateral movement, (B) JWT forgery and tampering, (C) context-based abuse,
-(D) role escalation through claims, and (E) device posture risk. Each scenario is
-mapped to a corresponding policy control and a reproducible test command.
+Five scenarios represent realistic attack paths across north-south and east-west traffic.
+Table~\ref{tab:stride} maps each scenario to a STRIDE threat category, the attacker's
+assumed position and credential scope, and the mitigating policy control.
+
+\begin{table}[!t]
+\caption{Threat model: STRIDE mapping and attacker profiles per scenario}
+\label{tab:stride}
+\centering
+\scriptsize
+\begin{tabularx}{\columnwidth}{l l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Sc. & STRIDE & Attacker profile (position / credentials) & Mitigating control \\
+\midrule
+A & Spoofing & Internal pod / no workload identity & mTLS STRICT + SPIFFE allowlist \\
+B & Tampering, Spoofing & External / forged or tampered JWT & JWKS signature verification \\
+C & Elevation of Privilege & Authenticated external / unsecured role header & OPA role + method + path rule \\
+D & Spoofing & Authenticated external / signed JWT, wrong role claim & Keycloak JWT claim + OPA \\
+E & Elevation of Privilege & Authenticated external / valid admin JWT, risky device & OPA device posture gate \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \subsection{Scenario Selection Rationale}
 The scenarios were chosen to reflect common attacker behavior observed in real
@@ -125,13 +142,40 @@ traffic paths without depending on rare or exotic conditions.
   identity alone is not sufficient.
 \end{itemize}
 
+\subsection{Authorization Policy Logic}
+Table~\ref{tab:rego} summarizes the core allow rules in the OPA Rego policy
+(\texttt{package istio.authz}). All rules default to \texttt{deny}; a request
+is allowed only when every condition in one rule is satisfied. The
+\texttt{jwt\_has\_role} helper calls \texttt{io.jwt.decode} to extract
+\texttt{payload.realm\_access.roles} without re-verifying the signature,
+relying on Istio's prior JWKS verification at the mesh layer.
+
+\begin{table}[!t]
+\caption{OPA Rego allow rules (simplified)}
+\label{tab:rego}
+\centering
+\scriptsize
+\begin{tabularx}{\columnwidth}{l >{\raggedright\arraybackslash}X l}
+\toprule
+Scenario & Conditions (conjunction) & Decision \\
+\midrule
+A (E-W) & \texttt{source.principal} = \texttt{frontend-sa} $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
+C & role header = ``user'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
+D (admin) & \texttt{jwt.realm\_access.roles} $\ni$ ``admin'' $\wedge$ posture\_ok & allow \\
+D (viewer) & \texttt{jwt.realm\_access.roles} $\ni$ ``viewer'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
+E (gate) & \texttt{X-Device-Firewall} $\in$ \{$\emptyset$,\ ``enabled''\} $\Rightarrow$ posture\_ok = true & gate \\
+Default & otherwise & deny \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
 \vspace{4pt}
 \section{Results}
 \subsection{Scenario Outcomes}
 All 18 test cases pass in the final validation run.
 Table~\ref{tab:scenarios} summarizes the scenario outcomes.
 
-\begin{table}[H]
+\begin{table}[!t]
 \caption{Security scenario outcomes}
 \label{tab:scenarios}
 \centering
@@ -182,7 +226,7 @@ policy decisions.
 
 Full test case results for all scenarios are shown in Table~\ref{tab:allcases}.
 
-\begin{table}[H]
+\begin{table}[!t]
 \caption{Combined test matrix: all scenarios A--E (18 cases)}
 \label{tab:allcases}
 \centering
@@ -229,7 +273,7 @@ includes detailed logs for JWT forgery, lateral movement attempts, and device po
 simulation. Figure~\ref{fig:kiali} shows the Kiali workload graph confirming mTLS
 enforcement across active service paths.
 
-\begin{figure}[H]
+\begin{figure}[!t]
   \centering
   \includegraphics[width=0.95\columnwidth]{../evidence/screenshots/kiali-topology.png}
   \caption{Kiali Workload Graph captured during the \texttt{make for\_pdf} test run,
@@ -242,11 +286,18 @@ intended.}
 \end{figure}
 
 \subsection{Performance}
-Performance testing uses Fortio with 200 requests and a single connection.
+Performance testing uses Fortio with 200 requests on a single persistent connection.
+The load parameters were chosen to isolate the pure policy evaluation cost—specifically
+the OPA gRPC round-trip latency and JWT payload parsing—without variance from
+connection-establishment overhead or scheduler contention under concurrent load. Minikube
+runs inside Docker Desktop on WSL2, where CPU resources are shared with the host OS; a
+single-connection sequential load avoids throttling artifacts that would otherwise
+conflate authorization latency with resource contention. The throughput figures therefore
+represent sequential-request capacity rather than peak concurrency.
 Table~\ref{tab:perf} summarizes the aggregate overhead relative to a baseline with no
 Istio policies applied.
 
-\begin{table}[H]
+\begin{table}[!t]
 \caption{Performance impact (200 requests, single connection)}
 \label{tab:perf}
 \centering
@@ -264,7 +315,7 @@ p99 latency & 8.5 ms & 10.5 ms & +2.0 ms (+23.5\%) \\
 
 Figure~\ref{fig:perf} visualizes the latency difference between baseline and ZTA.
 
-\begin{figure}[H]
+\begin{figure}[!t]
   \centering
   \begin{tikzpicture}
     \begin{axis}[
@@ -314,7 +365,7 @@ policy-gate cost only (the request is denied before reaching the application), w
 allowed cases include full end-to-end handling; the two categories should be compared
 separately.
 
-\begin{table}[H]
+\begin{table}[!t]
 \caption{Per-scenario latency (Fortio, 200 requests): allow cases are end-to-end; block cases measure policy gate only.}
 \label{tab:policy-cost}
 \centering
@@ -352,11 +403,23 @@ service policy enforcement.
 \vspace{4pt}
 \section{Limitations}
 Device posture is simulated through a client-provided header, and the OPA ext-authz
-channel is not mTLS-encrypted due to sidecar dependency constraints. Header-based role
-rules remain in place to demonstrate weaker access controls (Scenario C) alongside the
-stronger JWT claim path (Scenario D). The scenario set is representative but not
-exhaustive, and ZTA does not eliminate risks from human error, misconfiguration, or
-novel low-level exploits. The environment is local and does not represent production-scale latency or throughput.
+channel operates over plaintext gRPC on port 9191 rather than mTLS. This is a deliberate
+architectural constraint: injecting an Envoy sidecar into the OPA pod would create a
+circular authorization dependency. Every Envoy sidecar in the mesh dispatches a
+\texttt{CheckRequest} to OPA before forwarding an application request. If OPA's pod
+itself carried an injected sidecar, that sidecar's inbound filter chain would intercept
+the incoming \texttt{CheckRequest} and—following the same ext-authz filter configuration—
+would issue a new \texttt{CheckRequest} to OPA to authorize the original authorization
+request. This forms an infinite loop: Envoy $\to$ OPA $\to$ (OPA's own Envoy intercepts)
+$\to$ OPA $\to \cdots$. OPA must therefore reside outside the sidecar mesh. The
+plaintext channel is bounded to intra-cluster traffic by a Kubernetes NetworkPolicy
+(\texttt{opa-network-policy.yaml}) that restricts port 9191 to mesh-internal peers only.
+Header-based role rules remain in place to demonstrate weaker access controls (Scenario C)
+alongside the stronger JWT claim path (Scenario D). The scenario set is representative
+but not exhaustive, and ZTA does not eliminate risks from human error, misconfiguration,
+or novel low-level exploits. Sequential-connection load tests do not capture behavior
+under concurrent request pressure. The environment is local and does not represent
+production-scale latency or throughput.
 
 \vspace{4pt}
 \section{Experience and Reflection}
