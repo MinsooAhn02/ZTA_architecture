@@ -64,9 +64,9 @@ AuthorizationPolicy and PeerAuthentication resources, and Rego policies in OPA.
 \subsection{Policy Design}
 Four independent layers enforce access decisions:
 \begin{itemize}[noitemsep, topsep=3pt, parsep=0pt, partopsep=0pt]
-  \item mTLS workload identity for pod-to-pod traffic.
-  \item SPIFFE allowlist to restrict backend access to the frontend service account.
-  \item JWT signature validation using Keycloak JWKS.
+  \item mTLS (mutual TLS) workload identity for pod-to-pod traffic.
+  \item SPIFFE (Secure Production Identity Framework For Everyone) allowlist to restrict backend access to the frontend service account.
+  \item JWT signature validation using Keycloak JWKS (JSON Web Key Set).
   \item Context-aware authorization in OPA (role, method, path, posture).
 \end{itemize}
 Figure~\ref{fig:arch} illustrates both the north-south (external-to-internal) and east-west enforcement flows.
@@ -156,7 +156,10 @@ Table~\ref{tab:rego} summarizes the core allow rules in the OPA Rego policy
 is allowed only when every condition in one rule is satisfied. The
 \texttt{jwt\_has\_role} helper calls \texttt{io.jwt.decode} to extract
 \texttt{payload.realm\_access.roles} without re-verifying the signature,
-relying on Istio's prior JWKS verification at the mesh layer.
+relying on Istio's prior JWKS verification at the mesh layer. The admin rule
+also requires \texttt{posture\_ok} to remain consistent with the device posture
+gate in Scenario E, preventing a privilege bypass for admin accounts when the
+device signal indicates risk.
 
 \begin{table}[!t]
 \caption{OPA Rego allow rules (simplified)}
@@ -231,7 +234,7 @@ header to model a health signal and illustrates how posture can be integrated in
 policy decisions.
 
 \begin{table}[!t]
-\caption{Combined test matrix: all scenarios A--E (18 cases)}
+\caption{Combined test matrix: all scenarios A--E (18 cases). $^{*}$A-NS-2 is a deliberate allow case showing that header-only identity is exploitable; it is not a blocked attack.}
 \label{tab:allcases}
 \centering
 \scriptsize
@@ -241,7 +244,7 @@ Scenario & Case & Request signals & Expect & Result \\
 \midrule
 \multirow{5}{*}{A}
   & A-NS-1 & GET \texttt{/api/admin}, no identity & 403 & 403 \\
-  & A-NS-2 & GET \texttt{/api/admin}, header \texttt{role:admin} & 200 & 200 \\
+  & A-NS-2$^{*}$ & GET \texttt{/api/admin}, header \texttt{role:admin} & 200 & 200 \\
   & A-EW-1 & Rogue pod (no sidecar) to backend service & 403/000/503 & 403 \\
   & A-EW-2 & Wrong ServiceAccount (\texttt{backend-sa}) to backend & 403 & 403 \\
   & A-EW-3 & Rogue pod to backend pod IP:8080 & 403/000/503 & 503 \\
@@ -290,7 +293,7 @@ intended.}
 \end{figure}
 
 \subsection{Performance}
-Performance testing uses Fortio with 200 requests on a single persistent connection.
+Performance testing uses Fortio with 200 requests on a single persistent connection at maximum throughput (\texttt{-qps~0}).
 The load parameters were chosen to isolate the pure policy evaluation cost---specifically
 the OPA gRPC round-trip latency and JWT payload parsing---without noise from
 connection-establishment overhead or scheduler contention. Minikube runs inside Docker
@@ -301,7 +304,7 @@ timing variance that would conflate authorization latency with resource-sharing 
 A single-connection sequential load eliminates that noise and isolates the pure
 policy-evaluation cost. The throughput figures therefore represent sequential-request
 capacity rather than peak concurrency.
-Relative to a baseline with no Istio policies applied, ZTA adds 1.53\,ms to average
+Relative to a baseline with the Istio sidecar present but no AuthorizationPolicy or PeerAuthentication applied, ZTA adds 1.53\,ms to average
 latency (5.33\,ms $\to$ 6.86\,ms, $+$28.6\%), reduces QPS (queries per second) from 187.5 to 145.7
 ($-$22.3\%), and increases p99 (99th-percentile) latency from 8.5\,ms to 10.5\,ms ($+$23.5\%).
 Figure~\ref{fig:perf} visualizes the latency comparison.
@@ -347,8 +350,7 @@ Figure~\ref{fig:perf} visualizes the latency comparison.
     \end{axis}
   \end{tikzpicture}
   \caption{Latency overhead introduced by ZTA policies (Fortio, 200\,req,
-           single connection). Baseline avg 5.33\,ms, ZTA avg 6.86\,ms;
-           QPS drop: 187.5 $\to$ 145.7 ($-$22.3\%).}
+           single connection at max throughput). Baseline avg 5.33\,ms, ZTA avg 6.86\,ms ($+$28.6\%).}
   \label{fig:perf}
 \end{figure}
 
