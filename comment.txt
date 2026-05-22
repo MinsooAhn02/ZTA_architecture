@@ -1,0 +1,26 @@
+1. Five security scenarios are validated: lateral movement defense,
+JWT forgery and tampering, -> JWT forgery and tampering detection
+
+2. Modern breaches commonly follow a two-stage pattern: credential
+theft followed by lateral movement inside the network. -> Note: if credential heft is for a non-privileged account, this could be a 3 stage process with a 'privilege escalation' attack in between the 2 stages or after the lateral movement stage.
+
+3. description of figure 1 -> Is OPA (Open Policy Agent??) involved only in north-south (external-internal) paths?
+
+4. Table I maps each scenario to a
+STRIDE threat category, -> What is STRIDE? It looks like a collection of threat categories. Is there an 'organization' that manages the threat list (like OWASP)? Is this an acronym?
+
+5. A: Lateral movement (north-south and east-west). The
+north-south baseline confirms unauthenticated requests are
+denied, -> Even though this describes the type of traffic and analysis, make sure your paper clearly explains to the reader that north-south is external->internal traffic and east-west is inside the corporate network (lateral) movement.
+
+6. OPA gRPC round-trip latency and JWT payload parsing—without
+variance from connection-establishment overhead
+or scheduler contention under concurrent load -> This is a bit confusing. May wish to use a couple of sentences to make sure reader understands things like 'scheduler contention'. What is being 'scheduled'?
+
+7. . Relative to a baseline with no Istio
+policies applied, ZTA adds 1.53 ms to average latency (5.33 ms
+→ 6.86 ms, +28.6%), reduces QPS from 187.5 to 145.7
+(−22.3%), and increases p99 latency from 8.5 ms to 10.5 ms
+(+23.5%) -> Querries per second??, ?? define p99
+
+8. limitation part -> This is an excellent summary of limitations and reflections on the value of ZTA.
