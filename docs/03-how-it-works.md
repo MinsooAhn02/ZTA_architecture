@@ -165,15 +165,19 @@ The Rego policy in `k8s/opa-k8s.yaml` covers these decision rules:
 ```
 default allow = false
 
+# Toggle: gates the header-based demo rules below.
+# Production: set demo_mode = false → only the cryptographic JWT path (D/E) stays active.
+demo_mode = true
+
 # East-West: frontend-sa can GET non-admin paths
 allow if source = frontend-sa AND method = GET AND path ≠ /api/admin
 
-# ── DEMO SCAFFOLDING (Scenario A/C only — remove in production) ──
+# ── DEMO SCAFFOLDING (Scenario A/C only — gated by demo_mode) ──
 # role:admin header → allow  [client-controllable, not cryptographically bound]
-allow if role header = admin AND device is healthy
+allow if demo_mode AND role header = admin AND device is healthy
 
 # role:user header → GET only, no /api/admin  [Scenario C: context control demo]
-allow if role header = user AND method = GET AND path ≠ /api/admin
+allow if demo_mode AND role header = user AND method = GET AND path ≠ /api/admin
 # ─────────────────────────────────────────────────────────────────
 
 # JWT claim admin: (Scenario D)
@@ -184,7 +188,15 @@ allow if JWT has role:viewer AND method = GET AND path ≠ /api/admin
 
 # Device posture helper (Scenario E):
 device_is_healthy if X-Device-Firewall header is missing or = "enabled"
+
+# Audit-only (not used by `allow`): surfaces a reason in OPA decision logs so
+# operators can distinguish missing / non_bearer / malformed_jwt / ok. View via `make logs-pretty`.
+auth_reason = "missing" | "non_bearer" | "malformed_jwt" | "ok"
 ```
+
+> **Note on enforcement vs. authentication:** `demo_mode` only gates the *header*-based
+> rules. With `demo_mode = false`, Scenarios A/C header tests fail closed and only signed
+> JWT claims (D/E) grant access — the intended production posture.
 
 ---
 
@@ -204,14 +216,20 @@ device_is_healthy if X-Device-Firewall header is missing or = "enabled"
 
 ## Performance Characteristics
 
-Measured on local Minikube (not cloud), using Fortio load tester with 200 requests, single connection:
+Measured on local Minikube (Docker Desktop on WSL2), using Fortio with 200 requests on a
+single persistent connection at maximum throughput (`-qps 0`). The single-connection
+sequential load isolates pure policy-evaluation cost (OPA gRPC round-trip + JWT parsing)
+from connection-establishment overhead and WSL2 scheduler contention. Throughput figures
+therefore represent sequential-request capacity, not peak concurrency.
 
-| Metric       | Baseline (no policy) | ZTA Enabled (full stack) | Overhead          |
-| ------------ | -------------------- | ------------------------ | ----------------- |
-| Avg Latency  | 5.95 ms              | 10.8 ms                  | +4.85 ms (+81.5%) |
-| QPS          | 168.0                | 92.4                     | −75.6 (−45%)      |
-| p50 Latency  | 5.77 ms              | ~10 ms                   | +73%              |
-| p99 Latency  | 9.00 ms              | ~15 ms                   | +67%              |
+Baseline = Istio sidecar present but **no** AuthorizationPolicy or PeerAuthentication applied
+(isolates the policy-enforcement cost, not the sidecar itself):
+
+| Metric       | Baseline | ZTA Enabled (full stack) | Overhead          |
+| ------------ | -------- | ------------------------ | ----------------- |
+| Avg Latency  | 5.33 ms  | 6.86 ms                  | +1.53 ms (+28.6%) |
+| QPS          | 187.5    | 145.7                    | −41.8 (−22.3%)    |
+| p99 Latency  | 8.5 ms   | 10.5 ms                  | +2.0 ms (+23.5%)  |
 
 **What causes the overhead:**
 1. mTLS handshake — certificate exchange on each new connection (~2–3 ms)
@@ -219,8 +237,8 @@ Measured on local Minikube (not cloud), using Fortio load tester with 200 reques
 3. Envoy sidecar processing — filter chain, telemetry (~0.5 ms)
 
 **Is this acceptable?**
-The absolute overhead of +4.85 ms is negligible for most applications (human-perceptible threshold ≈ 100 ms).
-The 45% QPS drop is significant only for high-throughput single-connection benchmarks.
+The absolute overhead of +1.53 ms is negligible for most applications (human-perceptible threshold ≈ 100 ms).
+The 22.3% QPS drop matters only for high-throughput single-connection benchmarks.
 In production with connection reuse, OPA caching, and horizontal scaling, real overhead is typically 1–3 ms.
 
 ---

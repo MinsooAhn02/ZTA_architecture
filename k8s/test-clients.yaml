@@ -1,0 +1,77 @@
+# ============================================================
+# Long-lived test client pods for ZTA scenarios.
+# Replaces ad-hoc `kubectl run test-* --restart=Never` per test.
+#
+# Why: each ad-hoc pod takes 5~15s (image pull + scheduling + sidecar
+# injection). Re-using long-lived pods drops `make test-all` runtime
+# from minutes to seconds.
+#
+# Three variants, matching the threat model:
+#   curl-client    : default SA, sidecar-injected     -> NS tests
+#   rogue-client   : default SA, NO sidecar           -> lateral-block, lateral-podip
+#   wrongsa-client : backend-sa, sidecar-injected     -> lateral-sidecar
+# ============================================================
+
+# --- curl-client (NS tests) -------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: curl-client
+  labels: { app: curl-client, role: test-client }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: curl-client }
+  template:
+    metadata:
+      labels: { app: curl-client, role: test-client }
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl:8.5.0
+          command: ["sh", "-c", "sleep infinity"]
+---
+# --- rogue-client (no sidecar) ---------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rogue-client
+  labels: { app: rogue-client, role: test-client }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: rogue-client }
+  template:
+    metadata:
+      labels: { app: rogue-client, role: test-client }
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl:8.5.0
+          command: ["sh", "-c", "sleep infinity"]
+---
+# --- wrongsa-client (backend-sa, with sidecar) -----------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wrongsa-client
+  labels: { app: wrongsa-client, role: test-client }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: wrongsa-client }
+  template:
+    metadata:
+      labels: { app: wrongsa-client, role: test-client }
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+        - name: curl
+          image: curlimages/curl:8.5.0
+          command: ["sh", "-c", "sleep infinity"]

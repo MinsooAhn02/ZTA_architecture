@@ -97,7 +97,7 @@ A sidecar-less rogue pod cannot complete the mTLS handshake. A pod with the wron
 A fake token is denied at the no-principal authz path (403). A tampered real token fails signature verification (401). Hard bypass requires IdP private key compromise (out of scope).
 
 **Scenario C (Header-based context)**
-The role header model is intentionally weak by design — this scenario exists to demonstrate the limitation. Scenario D closes this gap with signed JWT claims.
+The role header model is intentionally weak by design — this scenario exists to demonstrate the limitation. Scenario D closes this gap with signed JWT claims. The header rules are gated behind the OPA `demo_mode` flag (`k8s/opa-k8s.yaml`); setting `demo_mode = false` removes the header-spoofing path entirely, leaving only signed-claim authorization active.
 
 **Scenario D (JWT claim authorization)**
 A viewer token on an admin or write path is blocked by OPA's claim+resource policy. Residual risk: a stolen admin token remains valid until expiry.

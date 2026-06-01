@@ -4,13 +4,18 @@ ZTA Security Dashboard
 Run  : python3 visualizer/server.py   (WSL required for make)
 Open : http://localhost:5001
 """
-import json, os, re, signal, subprocess, mimetypes
+import json, os, re, signal, subprocess, mimetypes, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
 PORT = 5001
 BASE = Path(__file__).resolve().parent.parent
+
+# Wall-clock timeout for a single `make` invocation streamed via SSE.
+# `make setup` legitimately takes ~5min on a cold cluster; 10min ceiling
+# protects against hung processes blocking the HTTP thread forever.
+SUBPROCESS_TIMEOUT_SEC = 600
 
 RUNNABLE = {
     "all": "all", "step1": "step1", "step2": "step2",
@@ -98,7 +103,12 @@ def parse_opa_logs():
     return logs[-50:]
 
 
-def parse_cluster():
+_CLUSTER_CACHE_TTL = 10  # seconds
+_cluster_cache = {"data": None, "ts": 0.0}
+_cluster_lock = threading.Lock()
+
+
+def _parse_cluster_uncached():
     out = {"pods": [], "policies": [], "error": None}
     try:
         r = subprocess.run(
@@ -133,6 +143,19 @@ def parse_cluster():
     except Exception:
         pass
     return out
+
+
+def parse_cluster():
+    now = time.monotonic()
+    with _cluster_lock:
+        if _cluster_cache["data"] is not None and \
+           (now - _cluster_cache["ts"]) < _CLUSTER_CACHE_TTL:
+            return _cluster_cache["data"]
+    data = _parse_cluster_uncached()
+    with _cluster_lock:
+        _cluster_cache["data"] = data
+        _cluster_cache["ts"] = time.monotonic()
+    return data
 
 
 _HTML_TMPL = """<!DOCTYPE html>
@@ -1248,9 +1271,28 @@ class Handler(BaseHTTPRequestHandler):
                 cwd=str(BASE), text=True, bufsize=1, errors="replace",
                 start_new_session=True,
             )
+
+            timed_out = {"v": False}
+            def _watchdog():
+                deadline = time.monotonic() + SUBPROCESS_TIMEOUT_SEC
+                while proc.poll() is None:
+                    if time.monotonic() > deadline:
+                        timed_out["v"] = True
+                        try: os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                        except Exception: pass
+                        time.sleep(2)
+                        try: os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                        except Exception: pass
+                        return
+                    time.sleep(1)
+            threading.Thread(target=_watchdog, daemon=True).start()
+
             for line in proc.stdout:
                 emit({"line": line.rstrip()})
             proc.wait()
+            if timed_out["v"]:
+                emit({"line": "ERROR: timeout after %ds — process killed"
+                              % SUBPROCESS_TIMEOUT_SEC})
             emit({"done": True, "status": "PASS" if proc.returncode == 0 else "FAIL",
                   "exit_code": proc.returncode})
         except (BrokenPipeError, ConnectionResetError):
@@ -1269,10 +1311,22 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def _self_check(html):
+    """Startup sanity: META placeholder replaced + first scenario id present."""
+    problems = []
+    if "ZTA_META_JSON" in html:
+        problems.append("template placeholder ZTA_META_JSON not replaced")
+    if '"A-NS-1"' not in html:
+        problems.append("META content missing (A-NS-1 not found in HTML)")
+    return problems
+
+
 if __name__ == "__main__":
     html = build_html()
-    assert "ZTA_META_JSON" not in html, "META injection failed!"
-    assert '"A-NS-1"' in html, "META content missing!"
+    for p in _self_check(html):
+        print("FATAL self-check:", p)
+    if _self_check(html):
+        raise SystemExit(1)
     print("ZTA Dashboard  ->  http://localhost:%d" % PORT)
     print("Project root   :  %s" % BASE)
     print("META scenarios :  %d loaded" % len(TEST_META))

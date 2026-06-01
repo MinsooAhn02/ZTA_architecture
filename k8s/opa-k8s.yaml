@@ -22,6 +22,14 @@ data:
     default allow = false
 
     # ──────────────────────────────────────────────────────────
+    # [Demo Mode Toggle]
+    # 헤더 기반(신뢰 불가) 데모 규칙 활성화 여부.
+    # Production 배포 시 false로 변경 → Scenario A/C 헤더 경로 차단,
+    # JWT(Scenario D/E) 경로만 유효.
+    # ──────────────────────────────────────────────────────────
+    demo_mode := true
+
+    # ──────────────────────────────────────────────────────────
     # [East-West Internal Traffic Defense]
     # Scenario A: Lateral Movement 방어
     #
@@ -49,7 +57,9 @@ data:
     # ══════════════════════════════════════════════════════════
 
     # Scenario A 테스트: role:admin 헤더 → 기본 통과 시연
+    # demo_mode 가드: production(demo_mode=false)에서는 자동 무력화
     allow {
+        demo_mode
         http_request.headers.role == "admin"
         device_posture_ok(http_request)
     }
@@ -58,6 +68,7 @@ data:
     # 목적: "인증된 사용자도 컨텍스트에 따라 제한됨" 시연
     # 한계: 헤더 값은 클라이언트가 임의 설정 가능 → Scenario D로 보완
     allow {
+        demo_mode
         http_request.headers.role == "user"
         http_request.method == "GET"
         not startswith(http_request.path, "/api/admin")
@@ -124,6 +135,35 @@ data:
         token := trim_prefix(bearer, "Bearer ")
         [_, payload, _] := io.jwt.decode(token)
         role == payload.realm_access.roles[_]
+    }
+
+    # ──────────────────────────────────────────────────────────
+    # Decision-log surface for malformed/missing Authorization.
+    # Not used by `allow` — exposes a reason field in OPA decision logs
+    # so operators can distinguish "no JWT" from "decode failure" from
+    # "valid JWT, wrong claim". Read via `make logs-pretty`.
+    # ──────────────────────────────────────────────────────────
+    auth_reason := "missing" {
+        not http_request.headers.authorization
+    }
+
+    auth_reason := "non_bearer" {
+        bearer := http_request.headers.authorization
+        not startswith(bearer, "Bearer ")
+    }
+
+    auth_reason := "malformed_jwt" {
+        bearer := http_request.headers.authorization
+        startswith(bearer, "Bearer ")
+        token := trim_prefix(bearer, "Bearer ")
+        not io.jwt.decode(token)
+    }
+
+    auth_reason := "ok" {
+        bearer := http_request.headers.authorization
+        startswith(bearer, "Bearer ")
+        token := trim_prefix(bearer, "Bearer ")
+        io.jwt.decode(token)
     }
 ---
 # ============================================================

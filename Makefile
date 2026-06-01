@@ -47,8 +47,8 @@ TEST_SUMMARY_FILE := .test-summary.log
         istio-install istio-addons \
         build-image rebuild-image \
 	prepare-summary print-summary \
-        deploy-app deploy-keycloak deploy-opa deploy-all wait-pods \
-        patch-istio-mesh apply-authz apply-jwt apply-microseg jwt-refresh \
+        deploy-app deploy-keycloak deploy-opa deploy-test-clients deploy-all wait-pods \
+        patch-istio-mesh apply-authz apply-jwt apply-microseg apply-opa-network-policy jwt-refresh \
         setup-keycloak setup-keycloak-viewer open-keycloak open-kiali open-grafana \
         get-token get-token-viewer \
 	test test-block test-pass test-jwt test-jwt-auto test-fake test-jwt-tampered \
@@ -87,7 +87,7 @@ all: setup ports
 	@echo ""
 
 # All tests: Scenario A + B + C + D + E(device posture)
-test-all: ensure-ports prepare-summary jwt-refresh setup-keycloak-viewer
+test-all: ensure-ports setup-keycloak prepare-summary jwt-refresh setup-keycloak-viewer
 	@echo ""
 	@echo "=============================================================="
 	@echo "RUNNING ALL TESTS (A~E)"
@@ -294,7 +294,7 @@ istio-addons:
 	@if kubectl get deployment kiali -n istio-system >/dev/null 2>&1; then \
 		echo "    Already installed (Skip)"; \
 	else \
-		kubectl apply -f istio-1.28.3/samples/addons/ 2>/dev/null || true; \
+		kubectl apply -f istio-1.28.3/samples/addons/; \
 	fi
 
 build-image:
@@ -303,18 +303,23 @@ build-image:
 	if docker image inspect $(APP_IMAGE) >/dev/null 2>&1; then \
 		echo "    Image exists (Skip, force: make rebuild-image)"; \
 	else \
-		docker build -t $(APP_IMAGE) ./app/; \
+		docker build --network=host -t $(APP_IMAGE) ./app/; \
 	fi
 
 rebuild-image:
-	@eval $$(minikube docker-env) && docker build -t $(APP_IMAGE) ./app/
+	@eval $$(minikube docker-env) && \
+		docker build --network=host -t $(APP_IMAGE) ./app/
 
 # ---------- Step 2 Details ----------
-deploy-all: deploy-app deploy-keycloak deploy-opa
+deploy-all: deploy-app deploy-keycloak deploy-opa deploy-test-clients
 
 deploy-app:
 	@echo ">>> Deploying Frontend + Backend..."
 	@kubectl apply -f k8s/k8s-manifest.yaml
+
+deploy-test-clients:
+	@echo ">>> Deploying long-lived test clients (curl/rogue/wrongsa)..."
+	@kubectl apply -f k8s/test-clients.yaml
 
 deploy-keycloak:
 	@echo ">>> Deploying Keycloak..."
@@ -330,6 +335,7 @@ wait-pods:
 	@kubectl wait --for=condition=Ready pod -l app=frontend --timeout=180s 2>/dev/null || true
 	@kubectl wait --for=condition=Ready pod -l app=keycloak --timeout=180s 2>/dev/null || true
 	@kubectl wait --for=condition=Ready pod -l app=opa --timeout=180s 2>/dev/null || true
+	@kubectl wait --for=condition=Ready pod -l role=test-client --timeout=180s 2>/dev/null || true
 	@echo "    All Pods ready"
 
 # ---------- Step 3 Details ----------
@@ -355,64 +361,49 @@ apply-microseg:
 	@kubectl apply -f k8s/peer-auth.yaml
 	@kubectl apply -f k8s/authz-policy-backend.yaml
 
+# Optional: requires CNI with NetworkPolicy support (Calico). Default Minikube ignores it.
+# Not wired into `setup` — invoke manually if your CNI supports it.
 apply-opa-network-policy:
-	@echo ">>> Applying OPA NetworkPolicy (restricts gRPC port 9191 to mesh-internal only)..."
-	@echo "    Note: requires CNI with NetworkPolicy support (Calico). Skipped on default Minikube."
-	@kubectl apply -f k8s/opa-network-policy.yaml 2>/dev/null || echo "    NetworkPolicy not applied (CNI may not support it)"
+	@echo ">>> Applying OPA NetworkPolicy (port 9191 → mesh-internal only)..."
+	@kubectl apply -f k8s/opa-network-policy.yaml \
+		|| echo "    NOTE: NetworkPolicy ignored (CNI lacks support)."
 
 apply-jwt:
 	@echo ">>> Applying JWT authentication policy..."
 	@kubectl apply -f k8s/jwt-auth.yaml
-	@-kubectl apply -f k8s/jwt-require-policy.yaml 2>/dev/null || true
+	@kubectl apply -f k8s/jwt-require-policy.yaml
 
+# JWKS fingerprint cached in .jwks-fingerprint; istiod restart only when JWKS changes.
+# Use FORCE=1 to bypass cache (e.g., after a Keycloak realm key rotation troubleshoot).
 jwt-refresh:
-	@echo ">>> Refreshing JWT verifier state (JWKS sync + Istio/frontend restart)..."
-	@bash scripts/apply-jwt-inline-jwks.sh
-	@kubectl rollout restart deployment/istiod -n istio-system
-	@kubectl rollout status deployment/istiod -n istio-system --timeout=240s
+	@echo ">>> Refreshing JWT verifier state (JWKS sync, conditional istiod restart)..."
+	@JWKS=$$(curl -sf "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/certs"); \
+	if [ -z "$$JWKS" ] || echo "$$JWKS" | grep -q '"error"'; then \
+		echo "    ERROR: Keycloak realm '$(KEYCLOAK_REALM)' not reachable or missing."; \
+		echo "    Fix: make setup-keycloak  (and ensure port-forward is running)."; \
+		exit 1; \
+	fi; \
+	CURRENT=$$(printf '%s' "$$JWKS" | sha256sum | cut -d' ' -f1); \
+	SHORT=$$(printf '%s' "$$CURRENT" | cut -c1-12); \
+	CACHED=$$( [ -f .jwks-fingerprint ] && cat .jwks-fingerprint || echo ""); \
+	if [ "$$CURRENT" = "$$CACHED" ] && [ "$$FORCE" != "1" ]; then \
+		echo "    JWKS unchanged (sha256 $$SHORT…) — skipping istiod restart."; \
+		bash scripts/apply-jwt-inline-jwks.sh; \
+	else \
+		echo "    JWKS changed (or FORCE=1) — full refresh."; \
+		bash scripts/apply-jwt-inline-jwks.sh; \
+		kubectl rollout restart deployment/istiod -n istio-system; \
+		kubectl rollout status deployment/istiod -n istio-system --timeout=240s; \
+		echo "$$CURRENT" > .jwks-fingerprint; \
+	fi
 
 # ============================================================
 #  Keycloak
 # ============================================================
 
 setup-keycloak:
-	@echo ">>> Keycloak Auto-Setup (myrealm, zta-client, testuser/admin)..."
-	@REALM_CHECK=$$(curl -s "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)" 2>/dev/null | grep -o '"realm":"$(KEYCLOAK_REALM)"' | wc -l); \
-	if [ "$$REALM_CHECK" != "0" ]; then \
-		echo "    Realm '$(KEYCLOAK_REALM)' already exists (Skip)"; \
-		echo "    Run 'make setup-keycloak-viewer' to add viewer user for Scenario D"; \
-	else \
-		echo "    Creating realm..."; \
-		ADMIN_TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/master/protocol/openid-connect/token" \
-			-d "grant_type=password" -d "client_id=admin-cli" -d "username=admin" -d "password=admin" \
-			| python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))"); \
-		if [ -z "$$ADMIN_TOKEN" ]; then \
-			echo "    ERROR: Failed to get admin token. Is Keycloak running?"; \
-			echo "    Run: kubectl port-forward svc/keycloak 8080:8080"; \
-			exit 1; \
-		fi; \
-		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms" \
-			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
-			-d '{"realm":"$(KEYCLOAK_REALM)","enabled":true}'; \
-		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/clients" \
-			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
-			-d '{"clientId":"zta-client","enabled":true,"publicClient":false,"secret":"zta-secret","directAccessGrantsEnabled":true}'; \
-		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/roles" \
-			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
-			-d '{"name":"admin"}'; \
-		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users" \
-			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
-			-d '{"username":"testuser","enabled":true,"credentials":[{"type":"password","value":"testpass","temporary":false}]}'; \
-		USER_ID=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users?username=testuser" \
-			-H "Authorization: Bearer $$ADMIN_TOKEN" | python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')"); \
-		ROLE=$$(curl -s "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/roles/admin" -H "Authorization: Bearer $$ADMIN_TOKEN"); \
-		curl -s -X POST "$(KEYCLOAK_URL)/admin/realms/$(KEYCLOAK_REALM)/users/$$USER_ID/role-mappings/realm" \
-			-H "Authorization: Bearer $$ADMIN_TOKEN" -H "Content-Type: application/json" \
-			-d "[$$ROLE]"; \
-		echo ""; \
-		echo "    Setup complete: testuser / testpass (role: admin)"; \
-		echo "    Next: make setup-keycloak-viewer (for Scenario D)"; \
-	fi
+	@KEYCLOAK_URL=$(KEYCLOAK_URL) KEYCLOAK_REALM=$(KEYCLOAK_REALM) \
+		bash scripts/setup-keycloak.sh
 
 # Add viewer role + vieweruser for Scenario D JWT Role Claim tests
 setup-keycloak-viewer:
@@ -482,28 +473,46 @@ open-grafana:
 
 get-token:
 	@echo ">>> Issuing JWT token for testuser (role: admin)..."
-	@curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" \
-		-d "client_id=zta-client" \
-		-d "client_secret=zta-secret" \
-		-d "username=testuser" \
-		-d "password=testpass" | python3 -c "import sys,json; d=json.load(sys.stdin); print('access_token:', d.get('access_token','ERROR: '+str(d)))"
+	@TOKEN=$$(bash scripts/get-token.sh testuser testpass) && echo "access_token: $$TOKEN"
 
 get-token-viewer:
 	@echo ">>> Issuing JWT token for vieweruser (role: viewer)..."
-	@curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" \
-		-d "client_id=zta-client" \
-		-d "client_secret=zta-secret" \
-		-d "username=vieweruser" \
-		-d "password=viewerpass" | python3 -c "import sys,json; d=json.load(sys.stdin); print('access_token:', d.get('access_token','ERROR: '+str(d)))"
+	@TOKEN=$$(bash scripts/get-token.sh vieweruser viewerpass) && echo "access_token: $$TOKEN"
 
 # ============================================================
 #  Scenario A~E Tests (Detailed Signal Tracing)
 #  Output format: REQUEST SIGNALS -> EXPECT -> RESULT -> STATUS
 # ============================================================
+# ============================================================
+#  Test recipe helpers
+#  - FLOW_PASS_NS: NS allow path (Istio→OPA→App)
+#  - FLOW_OPA_DENY: NS blocked at OPA
+#  - FLOW_JWT_BLOCK: NS blocked at Istio JWT verify
+# ============================================================
+define FLOW_PASS_NS
+echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
+echo "[ZTA:FLOW] node=istio-deny state=passed"; \
+echo "[ZTA:FLOW] node=opa state=passed"; \
+echo "[ZTA:FLOW] node=app state=allowed"
+endef
+
+define FLOW_OPA_DENY
+echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
+echo "[ZTA:FLOW] node=istio-deny state=passed"; \
+echo "[ZTA:FLOW] node=opa state=blocked"; \
+echo "[ZTA:FLOW] node=app state=unreachable"
+endef
+
+define FLOW_JWT_BLOCK
+echo "[ZTA:FLOW] node=istio-jwt state=blocked"; \
+echo "[ZTA:FLOW] node=istio-deny state=unreachable"; \
+echo "[ZTA:FLOW] node=opa state=unreachable"; \
+echo "[ZTA:FLOW] node=app state=unreachable"
+endef
+
+# ──────────────────────────────────────────────────────────
+#  Scenario A: North-South
+# ──────────────────────────────────────────────────────────
 test:
 	@echo ""
 	@echo "=============================================================="
@@ -519,184 +528,73 @@ test:
 test-block:
 	@echo ""
 	@echo "[A-NS-1] No identity -> Frontend must deny"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - method=GET path=/api/admin"
-	@echo "  - headers: (none)"
-	@echo "  - flow: client -> Istio PEP -> OPA PDP -> deny"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "REQUEST SIGNALS: method=GET path=/api/admin headers=(none)"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=403; \
-	RESULT=$$(kubectl delete pod test-block --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-block --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=blocked"; \
-		echo "[ZTA:FLOW] node=opa state=unreachable"; \
-		echo "[ZTA:FLOW] node=app state=unreachable"; \
-	fi; \
-	echo "A-NS-1 no-identity deny|$$EXPECTED|$$RESULT|$$STATUS|GET /api/admin without Authorization/role headers" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@bash scripts/run_case.sh "A-NS-1 no-identity deny" "403" curl-client GET \
+		http://frontend/api/admin "GET /api/admin without Authorization/role headers" \
+		&& { echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
+		     echo "[ZTA:FLOW] node=istio-deny state=blocked"; \
+		     echo "[ZTA:FLOW] node=opa state=unreachable"; \
+		     echo "[ZTA:FLOW] node=app state=unreachable"; }
 
 test-pass:
 	@echo ""
 	@echo "[A-NS-2] role:admin header -> Frontend allow (demo baseline)"
-	@echo "NOTE: Uses demo-scaffolding header rule (DEMO SCAFFOLDING block in opa-k8s.yaml)"
-	@echo "      This rule is intentionally weak — Scenario D (JWT) is the production-valid path"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - method=GET path=/api/admin"
-	@echo "  - headers: role=admin"
-	@echo "  - flow: client -> Istio PEP -> OPA PDP(header rule) -> allow"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "NOTE: demo-scaffolding header rule — Scenario D (JWT) is the production path."
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=200; \
-	RESULT=$$(kubectl delete pod test-pass --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-pass --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" -H "role: admin" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=passed"; \
-		echo "[ZTA:FLOW] node=app state=allowed"; \
-	fi; \
-	echo "A-NS-2 role-header allow|$$EXPECTED|$$RESULT|$$STATUS|GET /api/admin with role:admin header" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@bash scripts/run_case.sh "A-NS-2 role-header allow" "200" curl-client GET \
+		http://frontend/api/admin "GET /api/admin with role:admin header" \
+		"role: admin" \
+		&& { $(FLOW_PASS_NS); }
 
 test-jwt:
 	@echo ""
 	@echo "[B-3] Manual valid JWT -> allow"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - method=GET path=/api/admin"
-	@echo "  - headers: Authorization=Bearer <TOKEN>"
-	@echo "  - flow: Istio RequestAuthentication(JWKS verify) -> OPA claim check -> allow"
 	@if [ -z "$$TOKEN" ]; then echo "ERROR: TOKEN required. Usage: TOKEN=xxx make test-jwt"; exit 1; fi
-	@touch $(TEST_SUMMARY_FILE)
-	@EXPECTED=200; \
-	RESULT=$$(kubectl delete pod test-jwt --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-jwt --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	echo "B-3 manual valid jwt|$$EXPECTED|$$RESULT|$$STATUS|GET /api/admin with user-provided JWT" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@bash scripts/run_case.sh "B-3 manual valid jwt" "200" curl-client GET \
+		http://frontend/api/admin "GET /api/admin with user-provided JWT" \
+		"Authorization: Bearer $$TOKEN"
 
 test-fake:
 	@echo ""
 	@echo "[B-1] Forged JWT signature -> must fail authentication"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - method=GET path=/api/admin"
-	@echo "  - forged token with invalid signature"
-	@echo "  - flow: invalid token -> no valid principal -> require-jwt deny (403)"
-	@touch $(TEST_SUMMARY_FILE)
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=403; \
-	RESULT=$$(kubectl delete pod test-fake --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-fake --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" \
-		   -H "Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmYWtlIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9teXJlYWxtIn0.invalid" \
-		   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=blocked"; \
-		echo "[ZTA:FLOW] node=istio-deny state=unreachable"; \
-		echo "[ZTA:FLOW] node=opa state=unreachable"; \
-		echo "[ZTA:FLOW] node=app state=unreachable"; \
-	fi; \
-	echo "B-1 forged jwt reject|$$EXPECTED|$$RESULT|$$STATUS|invalid signature token to /api/admin" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@bash scripts/run_case.sh "B-1 forged jwt reject" "403" curl-client GET \
+		http://frontend/api/admin "invalid signature token to /api/admin" \
+		"Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmYWtlIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9teXJlYWxtIn0.invalid" \
+		&& { $(FLOW_JWT_BLOCK); }
 
 test-jwt-tampered:
 	@echo ""
 	@echo "[B-2] Tampered real JWT payload -> must fail authentication"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - start from real token"
-	@echo "  - modify payload, keep original signature"
-	@echo "  - flow: Istio verifies signature against new payload -> mismatch -> 401"
-	@touch $(TEST_SUMMARY_FILE)
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=401; \
-	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
-		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	@TOKEN=$$(bash scripts/get-token.sh testuser testpass 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then \
-		RESULT="NO_TOKEN"; \
-	else \
-		HEADER=$$(echo "$$TOKEN" | cut -d. -f1); \
-		SIG=$$(echo "$$TOKEN" | cut -d. -f3); \
-		TAMPERED_PAYLOAD=$$(python3 -c "import base64,json; p={'sub':'tampered-user','realm_access':{'roles':['admin']}}; print(base64.urlsafe_b64encode(json.dumps(p,separators=(',',':')).encode()).decode().rstrip('='))"); \
-		TAMPERED="$$HEADER.$$TAMPERED_PAYLOAD.$$SIG"; \
-		RESULT=$$(kubectl delete pod test-jwt-tampered --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-jwt-tampered --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TAMPERED" \
-			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+		echo "B-2 tampered jwt reject|401|NO_TOKEN|FAIL|token fetch failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 401"; echo "RESULT: NO_TOKEN"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=blocked"; \
-		echo "[ZTA:FLOW] node=istio-deny state=unreachable"; \
-		echo "[ZTA:FLOW] node=opa state=unreachable"; \
-		echo "[ZTA:FLOW] node=app state=unreachable"; \
-	fi; \
-	echo "B-2 tampered jwt reject|$$EXPECTED|$$RESULT|$$STATUS|real JWT payload modified then reused signature" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	HEADER=$$(echo "$$TOKEN" | cut -d. -f1); \
+	SIG=$$(echo "$$TOKEN" | cut -d. -f3); \
+	TAMPERED_PAYLOAD=$$(python3 -c "import base64,json; p={'sub':'tampered-user','realm_access':{'roles':['admin']}}; print(base64.urlsafe_b64encode(json.dumps(p,separators=(',',':')).encode()).decode().rstrip('='))"); \
+	TAMPERED="$$HEADER.$$TAMPERED_PAYLOAD.$$SIG"; \
+	bash scripts/run_case.sh "B-2 tampered jwt reject" "401" curl-client GET \
+		http://frontend/api/admin "real JWT payload modified then reused signature" \
+		"Authorization: Bearer $$TAMPERED" \
+		&& { $(FLOW_JWT_BLOCK); }
 
 test-jwt-auto:
 	@echo ""
 	@echo "[B-4] Valid Keycloak JWT -> allow"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - obtain token from Keycloak realm=$(KEYCLOAK_REALM)"
-	@echo "  - send Authorization: Bearer <valid token>"
-	@echo "  - flow: Istio authn pass -> OPA authz pass -> 200"
-	@touch $(TEST_SUMMARY_FILE)
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=200; \
-	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
-		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
+	@TOKEN=$$(bash scripts/get-token.sh testuser testpass 2>/dev/null); \
 	if [ -z "$$TOKEN" ]; then \
-		RESULT="NO_TOKEN"; \
-	else \
-		RESULT=$$(kubectl delete pod test-jwt-auto --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-jwt-auto --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
-			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+		echo "B-4 valid jwt allow|200|NO_TOKEN|FAIL|token fetch failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 200"; echo "RESULT: NO_TOKEN"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=passed"; \
-		echo "[ZTA:FLOW] node=app state=allowed"; \
-	fi; \
-	echo "B-4 valid jwt allow|$$EXPECTED|$$RESULT|$$STATUS|Keycloak issued token to /api/admin" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	bash scripts/run_case.sh "B-4 valid jwt allow" "200" curl-client GET \
+		http://frontend/api/admin "Keycloak issued token to /api/admin" \
+		"Authorization: Bearer $$TOKEN" \
+		&& { $(FLOW_PASS_NS); }
 
 test-lateral:
 	@echo ""
@@ -713,92 +611,43 @@ test-lateral:
 test-lateral-block:
 	@echo ""
 	@echo "[A-EW-1] Rogue pod (no sidecar) -> backend direct"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - source: pod without Istio sidecar/mTLS cert"
-	@echo "  - method=GET path=/ (backend service)"
-	@echo "  - flow: mTLS handshake expected to fail (or 403)"
-	@touch $(TEST_SUMMARY_FILE)
 	@echo "[ZTA:FLOW] node=rogue-pod state=active"
-	@EXPECTED="403,000,503"; \
-	RESULT=$$(kubectl delete pod test-rogue --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-rogue --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://backend/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; \
-	if [ "$$RESULT" = "403" ] || [ "$$RESULT" = "000" ] || [ "$$RESULT" = "503" ]; then STATUS="PASS"; fi; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=mtls state=blocked"; \
-		echo "[ZTA:FLOW] node=spiffe state=unreachable"; \
-		echo "[ZTA:FLOW] node=backend state=unreachable"; \
-	fi; \
-	echo "A-EW-1 rogue no-sidecar block|$$EXPECTED|$$RESULT|$$STATUS|pod without sidecar to backend service" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@TIMEOUT=5 bash scripts/run_case.sh "A-EW-1 rogue no-sidecar block" \
+		"403|000|503" rogue-client GET http://backend/ \
+		"pod without sidecar to backend service" \
+		&& { echo "[ZTA:FLOW] node=mtls state=blocked"; \
+		     echo "[ZTA:FLOW] node=spiffe state=unreachable"; \
+		     echo "[ZTA:FLOW] node=backend state=unreachable"; }
 
 test-lateral-sidecar:
 	@echo ""
 	@echo "[A-EW-2] Wrong ServiceAccount(sidecar 있음) -> backend"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - source SA=backend-sa (expected frontend-sa only)"
-	@echo "  - method=GET path=/"
-	@echo "  - flow: mTLS pass -> AuthorizationPolicy(SPIFFE principal) deny"
-	@touch $(TEST_SUMMARY_FILE)
 	@echo "[ZTA:FLOW] node=rogue-pod state=active"
-	@EXPECTED=403; \
-	RESULT=$$(kubectl delete pod test-wrongsa --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-wrongsa --image=curlimages/curl --restart=Never -i \
-		--overrides='{"spec":{"serviceAccountName":"backend-sa"}}' \
-		-- curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://backend/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=mtls state=passed"; \
-		echo "[ZTA:FLOW] node=spiffe state=blocked"; \
-		echo "[ZTA:FLOW] node=backend state=unreachable"; \
-	fi; \
-	echo "A-EW-2 wrong-sa deny|$$EXPECTED|$$RESULT|$$STATUS|backend-sa principal rejected by backend policy" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@bash scripts/run_case.sh "A-EW-2 wrong-sa deny" "403" wrongsa-client GET \
+		http://backend/ "backend-sa principal rejected by backend policy" \
+		&& { echo "[ZTA:FLOW] node=mtls state=passed"; \
+		     echo "[ZTA:FLOW] node=spiffe state=blocked"; \
+		     echo "[ZTA:FLOW] node=backend state=unreachable"; }
 
 test-lateral-podip:
 	@echo ""
 	@echo "[A-EW-3] Rogue pod (no sidecar) -> backend podIP:8080 direct"
-	@echo "REQUEST SIGNALS:"
-	@echo "  - source: pod without Istio sidecar"
-	@echo "  - target: backend pod IP:8080 (service name bypass attempt)"
-	@echo "  - flow: inbound Envoy/policy chain should still block"
-	@touch $(TEST_SUMMARY_FILE)
 	@echo "[ZTA:FLOW] node=rogue-pod state=active"
-	@EXPECTED="403,000,503"; \
-	BACKEND_IP=$$(kubectl get pod -l app=backend -o jsonpath='{.items[0].status.podIP}' 2>/dev/null); \
+	@BACKEND_IP=$$(kubectl get pod -l app=backend -o jsonpath='{.items[0].status.podIP}' 2>/dev/null); \
 	if [ -z "$$BACKEND_IP" ]; then \
-		RESULT="NO_BACKEND_IP"; \
-	else \
-		RESULT=$$(kubectl delete pod test-rogue-podip --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-rogue-podip --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://$$BACKEND_IP:8080/ 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+		echo "A-EW-3 podip bypass deny|403|000|503|NO_BACKEND_IP|FAIL|backend pod IP lookup failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 403,000,503"; echo "RESULT: NO_BACKEND_IP"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; \
-	if [ "$$RESULT" = "403" ] || [ "$$RESULT" = "000" ] || [ "$$RESULT" = "503" ]; then STATUS="PASS"; fi; \
-	echo "EXPECT: $$EXPECTED"; \
-	echo "RESULT: $$RESULT"; \
-	echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=mtls state=blocked"; \
-		echo "[ZTA:FLOW] node=spiffe state=unreachable"; \
-		echo "[ZTA:FLOW] node=backend state=unreachable"; \
-	fi; \
-	echo "A-EW-3 podip bypass deny|$$EXPECTED|$$RESULT|$$STATUS|rogue pod direct podIP call to backend:8080" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	TIMEOUT=5 bash scripts/run_case.sh "A-EW-3 podip bypass deny" \
+		"403|000|503" rogue-client GET "http://$$BACKEND_IP:8080/" \
+		"rogue pod direct podIP call to backend:8080" \
+		&& { echo "[ZTA:FLOW] node=mtls state=blocked"; \
+		     echo "[ZTA:FLOW] node=spiffe state=unreachable"; \
+		     echo "[ZTA:FLOW] node=backend state=unreachable"; }
 
-# ============================================================
+# ──────────────────────────────────────────────────────────
 #  Scenario C: Context-Based Access Control
-# ============================================================
+# ──────────────────────────────────────────────────────────
 test-context:
 	@echo ""
 	@echo "=============================================================="
@@ -813,99 +662,45 @@ test-context:
 
 test-context-user-get:
 	@echo ""
-	@echo "[C-1] role=user, GET /api/data"
-	@echo "REQUEST SIGNALS: allow expected (read + non-admin path)"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "[C-1] role=user, GET /api/data — allow expected"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=200; \
-	RESULT=$$(kubectl delete pod test-ctx-1 --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-ctx-1 --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" -H "role: user" http://frontend/api/data 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=passed"; \
-		echo "[ZTA:FLOW] node=app state=allowed"; \
-	fi; \
-	echo "C-1 user get data allow|$$EXPECTED|$$RESULT|$$STATUS|role:user GET /api/data" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@bash scripts/run_case.sh "C-1 user get data allow" "200" curl-client GET \
+		http://frontend/api/data "role:user GET /api/data" \
+		"role: user" \
+		&& { $(FLOW_PASS_NS); }
 
 test-context-user-admin:
 	@echo ""
-	@echo "[C-2] role=user, GET /api/admin"
-	@echo "REQUEST SIGNALS: deny expected (admin path restriction)"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "[C-2] role=user, GET /api/admin — deny expected"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=403; \
-	RESULT=$$(kubectl delete pod test-ctx-2 --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-ctx-2 --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" -H "role: user" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=blocked"; \
-		echo "[ZTA:FLOW] node=app state=unreachable"; \
-	fi; \
-	echo "C-2 user get admin deny|$$EXPECTED|$$RESULT|$$STATUS|role:user GET /api/admin" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@bash scripts/run_case.sh "C-2 user get admin deny" "403" curl-client GET \
+		http://frontend/api/admin "role:user GET /api/admin" \
+		"role: user" \
+		&& { $(FLOW_OPA_DENY); }
 
 test-context-user-post:
 	@echo ""
-	@echo "[C-3] role=user, POST /api/write"
-	@echo "REQUEST SIGNALS: deny expected (write requires admin)"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "[C-3] role=user, POST /api/write — deny expected"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=403; \
-	RESULT=$$(kubectl delete pod test-ctx-3 --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-ctx-3 --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "role: user" \
-		   -H "Content-Type: application/json" -d '{"data":"test"}' \
-		   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=blocked"; \
-		echo "[ZTA:FLOW] node=app state=unreachable"; \
-	fi; \
-	echo "C-3 user post write deny|$$EXPECTED|$$RESULT|$$STATUS|role:user POST /api/write" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@BODY='{"data":"test"}' bash scripts/run_case.sh \
+		"C-3 user post write deny" "403" curl-client POST \
+		http://frontend/api/write "role:user POST /api/write" \
+		"role: user" "Content-Type: application/json" \
+		&& { $(FLOW_OPA_DENY); }
 
 test-context-admin-post:
 	@echo ""
-	@echo "[C-4] role=admin, POST /api/write"
-	@echo "REQUEST SIGNALS: allow expected (admin write privilege)"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "[C-4] role=admin, POST /api/write — allow expected"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=200; \
-	RESULT=$$(kubectl delete pod test-ctx-4 --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-		kubectl run test-ctx-4 --image=curlimages/curl --restart=Never -i \
-		-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "role: admin" \
-		   -H "Content-Type: application/json" -d '{"data":"admin-write"}' \
-		   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=passed"; \
-		echo "[ZTA:FLOW] node=app state=allowed"; \
-	fi; \
-	echo "C-4 admin post write allow|$$EXPECTED|$$RESULT|$$STATUS|role:admin POST /api/write" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	@BODY='{"data":"admin-write"}' bash scripts/run_case.sh \
+		"C-4 admin post write allow" "200" curl-client POST \
+		http://frontend/api/write "role:admin POST /api/write" \
+		"role: admin" "Content-Type: application/json" \
+		&& { $(FLOW_PASS_NS); }
 
-# ============================================================
+# ──────────────────────────────────────────────────────────
 #  Scenario D: JWT Role Claim Access Control
-# ============================================================
+# ──────────────────────────────────────────────────────────
 test-jwt-role:
 	@echo ""
 	@echo "=============================================================="
@@ -918,126 +713,63 @@ test-jwt-role:
 	if [ $$FAIL -gt 0 ]; then echo "SCENARIO D: FAIL ($$FAIL failed)"; exit 1; fi; \
 	echo "SCENARIO D: PASS"
 
+# Per-recipe pattern: fetch (cached) token via get-token.sh, then run_case.sh.
 test-jwt-admin-all:
-	@echo ""
 	@echo "[D-1] admin JWT -> GET /api/admin"
-	@echo "REQUEST SIGNALS: Istio JWT verify pass + OPA claim(admin) allow"
-	@touch $(TEST_SUMMARY_FILE)
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=200; \
-	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
-		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
-	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
-		RESULT=$$(kubectl delete pod test-d1 --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-d1 --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
-			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	@TOKEN=$$(bash scripts/get-token.sh testuser testpass 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		echo "D-1 admin jwt admin path|200|NO_TOKEN|FAIL|token fetch failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 200"; echo "RESULT: NO_TOKEN"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=passed"; \
-		echo "[ZTA:FLOW] node=app state=allowed"; \
-	fi; \
-	echo "D-1 admin jwt admin path|$$EXPECTED|$$RESULT|$$STATUS|admin token GET /api/admin" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	bash scripts/run_case.sh "D-1 admin jwt admin path" "200" curl-client GET \
+		http://frontend/api/admin "admin token GET /api/admin" \
+		"Authorization: Bearer $$TOKEN" \
+		&& { $(FLOW_PASS_NS); }
 
 test-jwt-viewer-read:
-	@echo ""
 	@echo "[D-2] viewer JWT -> GET /api/data"
-	@echo "REQUEST SIGNALS: Istio JWT verify pass + OPA viewer read allow"
-	@touch $(TEST_SUMMARY_FILE)
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=200; \
-	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
-		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
-	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
-		RESULT=$$(kubectl delete pod test-d2 --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-d2 --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
-			   http://frontend/api/data 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	@TOKEN=$$(bash scripts/get-token.sh vieweruser viewerpass 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		echo "D-2 viewer jwt read allow|200|NO_TOKEN|FAIL|token fetch failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 200"; echo "RESULT: NO_TOKEN"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=passed"; \
-		echo "[ZTA:FLOW] node=app state=allowed"; \
-	fi; \
-	echo "D-2 viewer jwt read allow|$$EXPECTED|$$RESULT|$$STATUS|viewer token GET /api/data" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	bash scripts/run_case.sh "D-2 viewer jwt read allow" "200" curl-client GET \
+		http://frontend/api/data "viewer token GET /api/data" \
+		"Authorization: Bearer $$TOKEN" \
+		&& { $(FLOW_PASS_NS); }
 
 test-jwt-viewer-admin:
-	@echo ""
-	@echo "[D-3] viewer JWT -> GET /api/admin"
-	@echo "REQUEST SIGNALS: Istio JWT verify pass + OPA viewer admin path deny"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "[D-3] viewer JWT -> GET /api/admin (deny)"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=403; \
-	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
-		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
-	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
-		RESULT=$$(kubectl delete pod test-d3 --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-d3 --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
-			   http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	@TOKEN=$$(bash scripts/get-token.sh vieweruser viewerpass 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		echo "D-3 viewer jwt admin deny|403|NO_TOKEN|FAIL|token fetch failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 403"; echo "RESULT: NO_TOKEN"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=blocked"; \
-		echo "[ZTA:FLOW] node=app state=unreachable"; \
-	fi; \
-	echo "D-3 viewer jwt admin deny|$$EXPECTED|$$RESULT|$$STATUS|viewer token GET /api/admin" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	bash scripts/run_case.sh "D-3 viewer jwt admin deny" "403" curl-client GET \
+		http://frontend/api/admin "viewer token GET /api/admin" \
+		"Authorization: Bearer $$TOKEN" \
+		&& { $(FLOW_OPA_DENY); }
 
 test-jwt-viewer-post:
-	@echo ""
-	@echo "[D-4] viewer JWT -> POST /api/write"
-	@echo "REQUEST SIGNALS: Istio JWT verify pass + OPA viewer write deny"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "[D-4] viewer JWT -> POST /api/write (deny)"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=403; \
-	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
-		-d "username=vieweruser" -d "password=viewerpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
-	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
-		RESULT=$$(kubectl delete pod test-d4 --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-d4 --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $$TOKEN" \
-			   -H "Content-Type: application/json" -d '{"data":"inject"}' \
-			   http://frontend/api/write 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	@TOKEN=$$(bash scripts/get-token.sh vieweruser viewerpass 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		echo "D-4 viewer jwt post deny|403|NO_TOKEN|FAIL|token fetch failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 403"; echo "RESULT: NO_TOKEN"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=blocked"; \
-		echo "[ZTA:FLOW] node=app state=unreachable"; \
-	fi; \
-	echo "D-4 viewer jwt post deny|$$EXPECTED|$$RESULT|$$STATUS|viewer token POST /api/write" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	BODY='{"data":"inject"}' bash scripts/run_case.sh \
+		"D-4 viewer jwt post deny" "403" curl-client POST \
+		http://frontend/api/write "viewer token POST /api/write" \
+		"Authorization: Bearer $$TOKEN" "Content-Type: application/json" \
+		&& { $(FLOW_OPA_DENY); }
 
-# ============================================================
+# ──────────────────────────────────────────────────────────
 #  Scenario E: Device Posture / Extended Context
-# ============================================================
+# ──────────────────────────────────────────────────────────
 test-posture:
 	@echo ""
 	@echo "=============================================================="
@@ -1051,62 +783,30 @@ test-posture:
 	echo "SCENARIO E: PASS"
 
 test-posture-ok:
-	@echo ""
-	@echo "[E-1] admin JWT + X-Device-Firewall=enabled"
-	@echo "REQUEST SIGNALS: valid identity + healthy posture => allow"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "[E-1] admin JWT + X-Device-Firewall=enabled -> allow"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=200; \
-	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
-		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
-	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
-		RESULT=$$(kubectl delete pod test-posture-ok --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-posture-ok --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
-			   -H "X-Device-Firewall: enabled" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	@TOKEN=$$(bash scripts/get-token.sh testuser testpass 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		echo "E-1 posture enabled allow|200|NO_TOKEN|FAIL|token fetch failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 200"; echo "RESULT: NO_TOKEN"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=passed"; \
-		echo "[ZTA:FLOW] node=app state=allowed"; \
-	fi; \
-	echo "E-1 posture enabled allow|$$EXPECTED|$$RESULT|$$STATUS|admin JWT + firewall enabled" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	bash scripts/run_case.sh "E-1 posture enabled allow" "200" curl-client GET \
+		http://frontend/api/admin "admin JWT + firewall enabled" \
+		"Authorization: Bearer $$TOKEN" "X-Device-Firewall: enabled" \
+		&& { $(FLOW_PASS_NS); }
 
 test-posture-block:
-	@echo ""
-	@echo "[E-2] admin JWT + X-Device-Firewall=disabled"
-	@echo "REQUEST SIGNALS: valid identity + risky posture => deny"
-	@touch $(TEST_SUMMARY_FILE)
+	@echo "[E-2] admin JWT + X-Device-Firewall=disabled -> deny"
 	@echo "[ZTA:FLOW] node=client state=active"
-	@EXPECTED=403; \
-	TOKEN=$$(curl -s -X POST "$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)/protocol/openid-connect/token" \
-		-H "Content-Type: application/x-www-form-urlencoded" \
-		-d "grant_type=password" -d "client_id=zta-client" -d "client_secret=zta-secret" \
-		-d "username=testuser" -d "password=testpass" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null); \
-	if [ -z "$$TOKEN" ]; then RESULT="NO_TOKEN"; else \
-		RESULT=$$(kubectl delete pod test-posture-block --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true; \
-			kubectl run test-posture-block --image=curlimages/curl --restart=Never -i \
-			-- curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$TOKEN" \
-			   -H "X-Device-Firewall: disabled" http://frontend/api/admin 2>/dev/null | tr -d '\r' | grep -Eo '[0-9]{3}' | tail -n1); \
+	@TOKEN=$$(bash scripts/get-token.sh testuser testpass 2>/dev/null); \
+	if [ -z "$$TOKEN" ]; then \
+		echo "E-2 posture disabled deny|403|NO_TOKEN|FAIL|token fetch failed" >> $(TEST_SUMMARY_FILE); \
+		echo "EXPECT: 403"; echo "RESULT: NO_TOKEN"; echo "STATUS: FAIL"; exit 1; \
 	fi; \
-	[ -z "$$RESULT" ] && RESULT="ERR"; \
-	STATUS="FAIL"; [ "$$RESULT" = "$$EXPECTED" ] && STATUS="PASS"; \
-	echo "EXPECT: $$EXPECTED"; echo "RESULT: $$RESULT"; echo "STATUS: $$STATUS"; \
-	if [ "$$STATUS" = "PASS" ]; then \
-		echo "[ZTA:FLOW] node=istio-jwt state=passed"; \
-		echo "[ZTA:FLOW] node=istio-deny state=passed"; \
-		echo "[ZTA:FLOW] node=opa state=blocked"; \
-		echo "[ZTA:FLOW] node=app state=unreachable"; \
-	fi; \
-	echo "E-2 posture disabled deny|$$EXPECTED|$$RESULT|$$STATUS|admin JWT + firewall disabled" >> $(TEST_SUMMARY_FILE); \
-	[ "$$STATUS" = "PASS" ]
+	bash scripts/run_case.sh "E-2 posture disabled deny" "403" curl-client GET \
+		http://frontend/api/admin "admin JWT + firewall disabled" \
+		"Authorization: Bearer $$TOKEN" "X-Device-Firewall: disabled" \
+		&& { $(FLOW_OPA_DENY); }
 
 # ============================================================
 #  Demo Targets (storytelling output)

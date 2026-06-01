@@ -61,7 +61,7 @@ How:
 How:
 
 - Fortio benchmarks were executed through test-perf-baseline and test-perf-zta.
-- Measured deltas were documented: average latency +4.85 ms (5.95 -> 10.8), throughput -45% QPS (168.0 -> 92.4).
+- Measured deltas were documented: average latency +1.53 ms (5.33 -> 6.86, +28.6%), throughput -22.3% QPS (187.5 -> 145.7), p99 +2.0 ms (8.5 -> 10.5). Baseline = sidecar present, no AuthorizationPolicy/PeerAuthentication.
 
 ### 9) WireGuard baseline comparison was added
 
