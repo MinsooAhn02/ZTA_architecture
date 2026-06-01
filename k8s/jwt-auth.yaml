@@ -6,6 +6,9 @@ metadata:
   name: jwt-auth
   namespace: default
 spec:
+  # 의도: frontend만 검증. backend는 mTLS STRICT + SPIFFE allowlist로 보호되므로
+  #       JWT는 frontend에서 1회만 검증하고 forwardOriginalToken으로 backend에 전달.
+  #       이는 README "Design note — JWT verification scope" 참조.
   selector:
     matchLabels:
       app: frontend

@@ -1,101 +1,78 @@
 import os
 import json
+import logging
 import requests
 from flask import Flask, request
 
 app = Flask(__name__)
+log = logging.getLogger(__name__)
 
 ROLE = os.getenv('ROLE', 'backend')
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://backend')
 
-# ──────────────────────────────────────────────────
-# Frontend: proxies all requests to Backend
-# Backend: responds with resource data
-# OPA ext-authz intercepts BEFORE reaching these handlers
-# ──────────────────────────────────────────────────
+# OPA ext-authz intercepts BEFORE reaching these handlers.
+# Frontend proxies to Backend; Backend serves resource data.
+
+BACKEND_RESPONSES = {
+    '/': "Hello from Backend! (I am the secret data)",
+    '/api/data': '{"resource":"sensor-data","content":"temp=22C, humidity=45%","classification":"internal"}',
+    '/api/admin': '{"resource":"admin-config","classification":"CONFIDENTIAL","content":"system_key=zta-demo-key, policy_version=3"}',
+}
+
+FRONTEND_VIEWS = {
+    '/':           ("<h1>Frontend</h1><p>Backend replied: {body}</p>", "GET"),
+    '/api/data':   ("<h2>[GET /api/data]</h2><p>ZTA Decision: Allowed (user/admin, GET)</p><p>Data: {body}</p>", "GET"),
+    '/api/admin':  ("<h2>[GET /api/admin]</h2><p>ZTA Decision: Allowed (admin verified)</p><p>Data: {body}</p>", "GET"),
+}
+
+
+def _proxy(path, method, json_body=None):
+    """Frontend proxies to backend; return safe error message on failure (full detail in server log)."""
+    url = f"{BACKEND_URL}{path}"
+    try:
+        if method == "POST":
+            r = requests.post(url, json=json_body, timeout=5)
+        else:
+            r = requests.get(url, timeout=5)
+        return r.text
+    except Exception as e:
+        log.warning("backend proxy %s %s failed: %s", method, path, e)
+        return "<unavailable>"
+
 
 @app.route('/')
 def home():
-    if ROLE == 'frontend':
-        try:
-            resp = requests.get(BACKEND_URL, timeout=5)
-            return f"<h1>Frontend</h1><p>Backend replied: {resp.text}</p>"
-        except Exception as e:
-            return f"<h1>Frontend Error</h1><p>Could not reach backend: {e}</p>"
-    else:
-        return "Hello from Backend! (I am the secret data)"
+    if ROLE != 'frontend':
+        return BACKEND_RESPONSES['/']
+    body = _proxy('/', 'GET')
+    return FRONTEND_VIEWS['/'][0].format(body=body)
 
-
-# ──────────────────────────────────────────────────
-# Scenario C & D: Context-Based / JWT Role Endpoints
-# ──────────────────────────────────────────────────
 
 @app.route('/api/data')
 def api_data():
-    """
-    General read endpoint.
-    ZTA Policy: accessible to role:user (GET) and role:admin.
-    Blocked for: unauthenticated, POST without admin.
-    """
-    if ROLE == 'frontend':
-        try:
-            resp = requests.get(f"{BACKEND_URL}/api/data", timeout=5)
-            return (
-                f"<h2>[GET /api/data] General Data Access</h2>"
-                f"<p><b>ZTA Decision:</b> Allowed (user/admin role, GET method)</p>"
-                f"<p><b>Data:</b> {resp.text}</p>"
-            )
-        except Exception as e:
-            return f"<h2>Frontend Error</h2><p>{e}</p>"
-    else:
-        return '{"resource": "sensor-data", "content": "temp=22C, humidity=45%", "classification": "internal"}'
+    if ROLE != 'frontend':
+        return BACKEND_RESPONSES['/api/data']
+    body = _proxy('/api/data', 'GET')
+    return FRONTEND_VIEWS['/api/data'][0].format(body=body)
 
 
 @app.route('/api/admin')
 def api_admin():
-    """
-    Admin-only endpoint.
-    ZTA Policy: accessible ONLY to role:admin (header or JWT claim).
-    Blocked for: role:user, unauthenticated.
-    Demonstrates: path-based context-aware access control.
-    """
-    if ROLE == 'frontend':
-        try:
-            resp = requests.get(f"{BACKEND_URL}/api/admin", timeout=5)
-            return (
-                f"<h2>[GET /api/admin] Admin-Only Data</h2>"
-                f"<p><b>ZTA Decision:</b> Allowed (admin role verified)</p>"
-                f"<p><b>Data:</b> {resp.text}</p>"
-            )
-        except Exception as e:
-            return f"<h2>Frontend Error</h2><p>{e}</p>"
-    else:
-        return '{"resource": "admin-config", "classification": "CONFIDENTIAL", "content": "system_key=zta-demo-key, policy_version=3"}'
+    if ROLE != 'frontend':
+        return BACKEND_RESPONSES['/api/admin']
+    body = _proxy('/api/admin', 'GET')
+    return FRONTEND_VIEWS['/api/admin'][0].format(body=body)
 
 
 @app.route('/api/write', methods=['POST'])
 def api_write():
-    """
-    Write (state-change) endpoint.
-    ZTA Policy: POST requires role:admin - write ops are privileged.
-    Blocked for: role:user (GET-only), unauthenticated.
-    Demonstrates: method-based context control (read vs write privilege separation).
-    """
-    if ROLE == 'frontend':
-        try:
-            payload = request.get_json(silent=True) or {}
-            resp = requests.post(f"{BACKEND_URL}/api/write", json=payload, timeout=5)
-            return (
-                f"<h2>[POST /api/write] Write Operation</h2>"
-                f"<p><b>ZTA Decision:</b> Allowed (admin role, write privilege confirmed)</p>"
-                f"<p><b>Result:</b> {resp.text}</p>"
-            )
-        except Exception as e:
-            return f"<h2>Frontend Error</h2><p>{e}</p>"
-    else:
-        body = request.get_json(silent=True) or {}
-        return json.dumps({"result": "write-accepted", "committed": True, "payload": body})
+    payload = request.get_json(silent=True) or {}
+    if ROLE != 'frontend':
+        return json.dumps({"result": "write-accepted", "committed": True, "payload": payload})
+    body = _proxy('/api/write', 'POST', json_body=payload)
+    return f"<h2>[POST /api/write]</h2><p>ZTA Decision: Allowed (admin write)</p><p>Result: {body}</p>"
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     app.run(host='0.0.0.0', port=8080)

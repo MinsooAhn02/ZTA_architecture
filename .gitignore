@@ -9,3 +9,6 @@ __pycache__/
 *.log
 *.aux
 CLAUDE.md
+.token-cache/
+.last-error.log
+.jwks-fingerprint

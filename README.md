@@ -29,6 +29,12 @@ This repository includes an automated Makefile workflow for:
 | PEP (Policy Enforcement Point) | Istio (Envoy sidecar)   | Enforces mTLS and authorization at service boundaries       |
 | IdP (Identity Provider)        | Keycloak                | Identity management and JWT token issuance                  |
 
+**Design note — JWT verification scope.** `RequestAuthentication` (`k8s/jwt-auth.yaml`) is
+intentionally applied only to pods with `app: frontend`. The frontend is the sole north-south
+ingress; backend pods are protected by mTLS STRICT + SPIFFE allowlist (`authz-policy-backend.yaml`),
+so direct backend traffic is rejected before JWT verification would even matter. The JWT is
+forwarded to the backend (`forwardOriginalToken: true`) for OPA claim inspection.
+
 ## Security Scenarios
 
 | Scenario          | Threat                                      | Control                               | Verify                                     |

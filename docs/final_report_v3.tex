@@ -60,6 +60,12 @@ The sandbox runs on Minikube with Istio 1.28.3 for service mesh enforcement, OPA
 policy evaluation, and Keycloak for JWT issuance. A simple Flask frontend and backend
 are deployed as separate services. Security policies are applied through Istio
 AuthorizationPolicy and PeerAuthentication resources, and Rego policies in OPA.
+The full validation suite is driven by \texttt{make test-all}, which dispatches each
+case through a shared runner against three long-lived client workloads---a
+sidecar-injected client, a sidecar-free ``rogue'' client, and a client bound to the
+wrong ServiceAccount---reused via \texttt{kubectl exec} rather than spawning a fresh
+pod per case. This keeps the 18-case suite at roughly twenty seconds end-to-end and
+makes the security outcomes deterministically reproducible.
 
 \subsection{Policy Design}
 Four independent layers enforce access decisions:
@@ -159,10 +165,19 @@ is allowed only when every condition in one rule is satisfied. The
 relying on Istio's prior JWKS verification at the mesh layer. The admin rule
 also requires \texttt{posture\_ok} to remain consistent with the device posture
 gate in Scenario E, preventing a privilege bypass for admin accounts when the
-device signal indicates risk.
+device signal indicates risk. The header-based rules (Scenario C) are gated behind
+a single \texttt{demo\_mode} flag in the policy; setting \texttt{demo\_mode = false}
+removes the client-spoofable header path entirely, leaving only the cryptographically
+signed JWT claims (Scenarios D and E) as the production authorization source. The
+policy additionally exposes an audit-only \texttt{auth\_reason} value
+(\texttt{missing} / \texttt{non\_bearer} / \texttt{malformed\_jwt} / \texttt{ok})
+in OPA decision logs, so a denied request can be attributed to a specific cause
+without that path granting access.
 
 \begin{table}[!t]
-\caption{OPA Rego allow rules (simplified)}
+\caption{OPA Rego allow rules (simplified). $^{\dagger}$The header-based Scenario C
+rules are gated by \texttt{demo\_mode}; with \texttt{demo\_mode = false} only the
+signed-JWT rules (D, E) remain active.}
 \label{tab:rego}
 \centering
 \scriptsize
@@ -171,7 +186,7 @@ device signal indicates risk.
 Scenario & Conditions (conjunction) & Decision \\
 \midrule
 A (E-W) & \texttt{source.principal} = \texttt{frontend-sa} $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
-C & role header = ``user'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
+C$^{\dagger}$ & \texttt{demo\_mode} $\wedge$ role header = ``user'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
 D (admin) & \texttt{jwt.realm\_access.roles} $\ni$ ``admin'' $\wedge$ posture\_ok & allow \\
 D (viewer) & \texttt{jwt.realm\_access.roles} $\ni$ ``viewer'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
 E & \texttt{jwt.realm\_access.roles} $\ni$ ``admin'' $\wedge$ \texttt{X-Device-Firewall} $\in$ \{$\emptyset$,\ ``enabled''\} & allow \\

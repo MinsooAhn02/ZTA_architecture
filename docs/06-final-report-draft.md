@@ -67,7 +67,7 @@ East-West (pod-to-pod) traffic is separately governed by mTLS STRICT and SPIFFE-
 | D | Role escalation via JWT claim | Keycloak-signed JWT + OPA claim policy | Blocked (403) |
 | E | Valid credential from unhealthy device | OPA device posture condition | Blocked (403) |
 
-All 20 test cases across Scenarios A–E passed in the final validation run. Full output: `evidence/test-results.txt`.
+All 18 test cases across Scenarios A–E (A:5, B:3, C:4, D:4, E:2) passed in the final validation run. Full output: `evidence/test-results.txt`.
 
 **Key security property:** No single bypass is sufficient. An attacker with a valid token but no workload certificate is blocked at Layer 1. An attacker with a valid certificate but a forged token is blocked at Layer 3. An attacker with a valid token and valid certificate but the wrong role is blocked at Layer 4. Layers are independent.
 
@@ -75,15 +75,17 @@ All 20 test cases across Scenarios A–E passed in the final validation run. Ful
 
 ## 5. Performance Trade-off
 
-Measured on local Minikube using Fortio (200 requests, single connection):
+Measured on local Minikube (Docker Desktop on WSL2) using Fortio (200 requests, single
+persistent connection, `-qps 0`). Baseline = Istio sidecar present but no AuthorizationPolicy
+or PeerAuthentication applied, so the delta isolates policy-enforcement cost (not the sidecar):
 
 | Metric | Baseline | ZTA Enabled | Delta |
 |---|---|---|---|
-| Avg Latency | 5.95 ms | 10.8 ms | +4.85 ms (+81.5%) |
-| Throughput (QPS) | 168.0 | 92.4 | −45% |
-| p99 Latency | 9.00 ms | ~15 ms | +67% |
+| Avg Latency | 5.33 ms | 6.86 ms | +1.53 ms (+28.6%) |
+| Throughput (QPS) | 187.5 | 145.7 | −22.3% |
+| p99 Latency | 8.5 ms | 10.5 ms | +2.0 ms (+23.5%) |
 
-The absolute overhead (+4.85 ms) is negligible for human-facing applications (perceptible threshold ≈ 100 ms). The QPS drop is significant only in single-connection micro-benchmarks. In production with connection reuse and OPA caching, typical overhead is 1–3 ms.
+The absolute overhead (+1.53 ms) is negligible for human-facing applications (perceptible threshold ≈ 100 ms). The QPS drop is significant only in single-connection micro-benchmarks. In production with connection reuse and OPA caching, typical overhead is 1–3 ms.
 
 For comparison, WireGuard VPN adds ~0.1–3 ms transport overhead but provides none of the per-request authorization or lateral movement controls. The recommended production configuration is WireGuard for network-layer entry combined with ZTA inside the cluster — complementary, not alternatives.
 

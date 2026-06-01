@@ -145,8 +145,14 @@ make test-posture             # run both together
 make test-all
 ```
 
-All 20 test cases across Scenarios A–E. Every case passed in the final validation run
-(see `evidence/test-results.txt`).
+All 18 test cases across Scenarios A–E (A:5, B:3, C:4, D:4, E:2). Every case passed in the
+final validation run (see `evidence/test-results.txt`).
+
+Tests run against three long-lived client Deployments (`curl-client`, `rogue-client` with no
+sidecar, `wrongsa-client` with the wrong ServiceAccount) via `kubectl exec`, rather than
+spawning a fresh pod per case — this keeps the full suite at ~20 s instead of several minutes.
+Each case is dispatched through `scripts/run_case.sh`; Keycloak tokens are cached for 5 min by
+`scripts/get-token.sh`.
 
 ---
 
