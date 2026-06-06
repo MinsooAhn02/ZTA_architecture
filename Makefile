@@ -259,6 +259,8 @@ step3: patch-istio-mesh apply-authz
 	@echo ">>> [Step 3] North-South policies applied"
 
 step4: apply-microseg apply-jwt ensure-ports setup-keycloak
+	@echo "    Waiting 10s for Envoy sidecars to sync new policies..."
+	@sleep 10
 	@echo ">>> [Step 4] East-West + JWT policies applied (Keycloak configured)"
 
 # ---------- Step 1 Details ----------
@@ -331,11 +333,11 @@ deploy-opa:
 
 wait-pods:
 	@echo ">>> Waiting for Pods to be ready (max 3min)..."
-	@kubectl wait --for=condition=Ready pod -l app=backend --timeout=180s 2>/dev/null || true
-	@kubectl wait --for=condition=Ready pod -l app=frontend --timeout=180s 2>/dev/null || true
-	@kubectl wait --for=condition=Ready pod -l app=keycloak --timeout=180s 2>/dev/null || true
-	@kubectl wait --for=condition=Ready pod -l app=opa --timeout=180s 2>/dev/null || true
-	@kubectl wait --for=condition=Ready pod -l role=test-client --timeout=180s 2>/dev/null || true
+	@kubectl wait --for=condition=Ready pod -l app=backend --timeout=180s || { echo "ERROR: backend pod not ready"; exit 1; }
+	@kubectl wait --for=condition=Ready pod -l app=frontend --timeout=180s || { echo "ERROR: frontend pod not ready"; exit 1; }
+	@kubectl wait --for=condition=Ready pod -l app=keycloak --timeout=180s || { echo "ERROR: keycloak pod not ready"; exit 1; }
+	@kubectl wait --for=condition=Ready pod -l app=opa --timeout=180s || { echo "ERROR: opa pod not ready"; exit 1; }
+	@kubectl wait --for=condition=Ready pod -l role=test-client --timeout=180s || { echo "ERROR: test-client pod not ready"; exit 1; }
 	@echo "    All Pods ready"
 
 # ---------- Step 3 Details ----------
@@ -353,7 +355,11 @@ patch-istio-mesh:
 
 apply-authz:
 	@echo ">>> Applying AuthorizationPolicy..."
-	@kubectl apply -f k8s/authz-policy.yaml
+	@for i in 1 2 3 4 5; do \
+		kubectl apply -f k8s/authz-policy.yaml && break; \
+		echo "    Webhook not ready yet, retrying in 5s (attempt $$i/5)..."; \
+		sleep 5; \
+	done
 
 # ---------- Step 4 Details ----------
 apply-microseg:
@@ -895,7 +901,12 @@ ensure-ports:
 	@if ! curl -s --connect-timeout 1 http://localhost:18080 >/dev/null 2>&1; then \
 		echo ">>> Starting Keycloak port-forward..."; \
 		nohup kubectl port-forward svc/keycloak 18080:8080 >/dev/null 2>&1 & \
-		sleep 2; \
+		for i in 1 2 3 4 5 6 7 8 9 10; do \
+			curl -s --connect-timeout 1 http://localhost:18080 >/dev/null 2>&1 && break; \
+			sleep 1; \
+		done; \
+		curl -s --connect-timeout 1 http://localhost:18080 >/dev/null 2>&1 \
+			|| { echo "ERROR: Keycloak port-forward failed to start"; exit 1; }; \
 	fi
 
 port-keycloak:
