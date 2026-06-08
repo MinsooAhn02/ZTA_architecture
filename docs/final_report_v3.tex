@@ -157,6 +157,7 @@ traffic paths without depending on rare or exotic conditions.
 \end{itemize}
 
 \subsection{Authorization Policy Logic}
+\begin{sloppypar}
 Table~\ref{tab:rego} summarizes the core allow rules in the OPA Rego policy
 (\texttt{package istio.authz}). All rules default to \texttt{deny}; a request
 is allowed only when every condition in one rule is satisfied. The
@@ -173,6 +174,7 @@ policy additionally exposes an audit-only \texttt{auth\_reason} value
 (\texttt{missing} / \texttt{non\_bearer} / \texttt{malformed\_jwt} / \texttt{ok})
 in OPA decision logs, so a denied request can be attributed to a specific cause
 without that path granting access.
+\end{sloppypar}
 
 \begin{table}[!t]
 \caption{OPA Rego allow rules (simplified). $^{\dagger}$The header-based Scenario C

@@ -3,30 +3,52 @@
 #  Based on NIST SP 800-207 | Keycloak + OPA + Istio
 # ============================================================
 #
-#  Quick Start
+#  PREREQUISITES (run inside WSL Ubuntu — NOT PowerShell)
 #  ─────────────────────────────────────
-#    make all        → Full install + deploy + policies (first time)
-#    make test-all   → Run all security tests (A, B, C, D, E)
-#    make demo       → Run storytelling demo flow (A~E)
-#    make ports      → Start all port-forwards (background)
-#    make status     → Check current status
+#    1. Docker Desktop must be running on Windows (with WSL integration enabled)
+#    2. All commands below must be run inside a WSL Ubuntu terminal
 #
-#  Test Scenarios
+#  FIRST-TIME SETUP (new machine / fresh clone)
 #  ─────────────────────────────────────
-#    make test           Scenario A/B: North-South (block/pass)
-#    make test-lateral   Scenario A: Lateral Movement defense
+#    Step 1:  make setup     → Install minikube + Istio + deploy app + apply all policies
+#    Step 2:  make test-all  → Run all security tests (A–E)  [~5 min on first run]
+#
+#    NOTE: On first run, make test-all restarts istiod to sync Keycloak JWKS.
+#          A 30-second wait is built in automatically — do not interrupt.
+#
+#  RETURNING / SUBSEQUENT RUNS (cluster already up)
+#  ─────────────────────────────────────
+#    make test-all   → Re-run all security tests (handles port-forwards automatically)
+#    make ports      → Restart port-forwards only (if browser dashboards stopped)
+#    make status     → Check pod/policy status
+#
+#  DASHBOARDS (after make ports)
+#  ─────────────────────────────────────
+#    Keycloak: http://localhost:18080   (admin / admin)
+#    Kiali:    http://localhost:20000
+#    Grafana:  http://localhost:20002
+#
+#  INDIVIDUAL SCENARIO TESTS
+#  ─────────────────────────────────────
+#    make test           Scenario A: North-South block/pass
+#    make test-lateral   Scenario A: East-West lateral movement
 #    make test-fake      Scenario B: JWT forgery → 403
-#    make test-jwt-tampered  Scenario B: Real JWT payload tamper → 401
+#    make test-jwt-tampered  Scenario B: JWT payload tamper → 401
 #    make test-jwt-auto  Scenario B: Valid JWT → 200
 #    make test-context   Scenario C: Context-based (role+method+path)
-#    make test-jwt-role  Scenario D: JWT role claim access control
-#    make test-posture   Scenario E: Device posture check
+#    make test-jwt-role  Scenario D: JWT role claim authorization
+#    make test-posture   Scenario E: Device posture gate
 #    make test-all       All scenarios A+B+C+D+E
 #
-#  Monitoring Helpers
+#  MONITORING
 #  ─────────────────────────────────────
 #    make logs          Raw OPA decision logs
 #    make logs-pretty   Parsed OPA decision summary
+#
+#  CLEANUP
+#  ─────────────────────────────────────
+#    make clean         Remove app + policy resources (keep Istio/minikube)
+#    make clean-all     Full teardown including Istio and minikube
 #
 # ============================================================
 
@@ -401,6 +423,8 @@ jwt-refresh:
 		kubectl rollout restart deployment/istiod -n istio-system; \
 		kubectl rollout status deployment/istiod -n istio-system --timeout=240s; \
 		echo "$$CURRENT" > .jwks-fingerprint; \
+		echo "    Waiting 30s for all Envoy sidecars to re-sync with new istiod..."; \
+		sleep 30; \
 	fi
 
 # ============================================================
