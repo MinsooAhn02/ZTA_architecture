@@ -2,6 +2,91 @@
 
 Practical implementation of Zero Trust Architecture (ZTA) on Kubernetes, aligned with NIST SP 800-207.
 
+## Author
+
+- Name: Minsoo Ahn
+- Student ID: 114743792
+
+---
+
+## Quick Start (First-Time Setup)
+
+> **All commands must run inside a WSL Ubuntu terminal — not PowerShell.**
+> Docker Desktop must be running on Windows before you begin.
+
+### Step 0: Prerequisites
+
+On Windows host:
+- WSL2 with Ubuntu installed
+- Docker Desktop running, with WSL integration enabled for your Ubuntu distro
+
+Inside WSL Ubuntu (install if missing):
+
+```bash
+sudo apt update && sudo apt install -y build-essential curl python3
+```
+
+Then install kubectl and minikube if not already present — see [Environment Setup](#environment-setup-windows-11--wsl2) below.
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/MinsooAhn-SBU/ZTA_architecture.git
+cd ZTA_architecture
+```
+
+### Step 2: Full Environment Setup
+
+```bash
+make setup
+```
+
+This single command:
+1. Starts minikube (Docker Desktop driver)
+2. Installs Istio + addons (Kiali, Prometheus, Grafana)
+3. Builds and deploys the app image
+4. Deploys Keycloak (identity provider) and OPA (policy engine)
+5. Applies all mTLS, JWT, and authorization policies
+6. Configures the Keycloak realm and users
+
+Takes approximately 3–5 minutes on first run. Subsequent runs skip already-completed steps.
+
+### Step 3: Run All Security Tests
+
+```bash
+make test-all
+```
+
+This command is self-contained — it starts port-forwards, syncs Keycloak JWT keys, and then runs all 18 test cases across Scenarios A–E.
+
+> **First-run note:** On a fresh clone, `make test-all` detects that the JWT key fingerprint is new and restarts `istiod` to sync. A **30-second wait** is built in automatically after the restart so that all Envoy sidecars finish re-syncing before tests begin. Do not interrupt this wait.
+
+Expected output ends with:
+
+```
+FINAL: PASS (0 group/step failed)
+```
+
+### Step 4: Open Dashboards (Optional)
+
+```bash
+make ports          # Start port-forwards (already done by test-all, but use this to restart)
+make open-kiali     # http://localhost:20000  — service mesh topology
+make open-grafana   # http://localhost:20002  — metrics & latency
+make open-keycloak  # http://localhost:18080  — identity provider (admin / admin)
+```
+
+### Phased Setup (if `make setup` fails partway)
+
+```bash
+make step1   # minikube + Istio + addons + Docker image
+make step2   # deploy app + Keycloak + OPA
+make step3   # apply North-South policies (OPA ext-authz + AuthzPolicy)
+make step4   # apply East-West policies (mTLS STRICT + JWT) + configure Keycloak
+```
+
+---
+
 This repository includes an automated Makefile workflow for:
 
 - environment setup
@@ -9,11 +94,6 @@ This repository includes an automated Makefile workflow for:
 - security policy application
 - attack-scenario verification
 - observability and performance checks
-
-## Author
-
-- Name: Minsoo Ahn
-- Student ID: 114743792
 
 ## Research Objectives
 
@@ -230,55 +310,21 @@ sudo apt install -y build-essential
 
 ## Quick Start
 
-### 1. Clone and Enter Repository
+See [Quick Start (First-Time Setup)](#quick-start-first-time-setup) at the top of this document for the full step-by-step guide.
+
+**TL;DR (inside WSL Ubuntu, Docker Desktop running):**
 
 ```bash
 git clone https://github.com/MinsooAhn-SBU/ZTA_architecture.git
 cd ZTA_architecture
+make setup      # ~3-5 min, run once
+make test-all   # run all 18 security tests
 ```
 
-### 2. Start Docker Desktop (Windows)
-
-Ensure Docker Desktop is running before starting minikube.
-
-### 3. One-Command Full Setup
-
-```bash
-make setup
-```
-
-What make setup does:
-
-1. Starts minikube
-2. Installs Istio (if needed)
-3. Installs Istio addons (Kiali/Prometheus/Grafana)
-4. Builds app image in minikube docker environment
-5. Deploys app + Keycloak + OPA
-6. Applies authorization and micro-segmentation policies
-
-Keycloak realm and users are configured automatically during `make setup`.
-The viewer user (`vieweruser`) needed for Scenario D is created and role-assigned
-automatically when `make test-all` runs — no manual step required.
-
-To add or repair the viewer user outside of `test-all`:
+To add or repair the viewer user for Scenario D outside of `test-all`:
 
 ```bash
 make setup-keycloak-viewer
-```
-
-### 4. Run Security Tests
-
-```bash
-make test-all
-```
-
-### 5. Open Dashboards
-
-```bash
-make ports        # Start all port-forwards first
-make open-kiali    # Open Kiali in browser    (http://localhost:20000)
-make open-grafana  # Open Grafana in browser  (http://localhost:20002)
-make open-keycloak # Open Keycloak in browser (http://localhost:18080)
 ```
 
 ## Dashboard Usage Guide
