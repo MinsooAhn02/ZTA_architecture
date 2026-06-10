@@ -11,7 +11,7 @@
 #  FIRST-TIME SETUP (new machine / fresh clone)
 #  ─────────────────────────────────────
 #    Step 1:  make all       → Install minikube + Istio + deploy app + apply all policies + port-forwards
-#    Step 2:  make test-all  → Run all security tests (A–E)  [~5 min on first run]
+#    Step 2:  make test-all  → Run all 18 security tests (A–E)  [~5 min on first run]
 #    Step 3:  make clean     → Remove app + policy resources when done
 #
 #    NOTE: make test-all requires make all to be run first.
