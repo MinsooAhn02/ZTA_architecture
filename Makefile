@@ -10,14 +10,19 @@
 #
 #  FIRST-TIME SETUP (new machine / fresh clone)
 #  ─────────────────────────────────────
-#    Step 1:  make setup     → Install minikube + Istio + deploy app + apply all policies
+#    Step 1:  make all       → Install minikube + Istio + deploy app + apply all policies + port-forwards
 #    Step 2:  make test-all  → Run all security tests (A–E)  [~5 min on first run]
+#    Step 3:  make clean     → Remove app + policy resources when done
 #
-#    NOTE: On first run, make test-all restarts istiod to sync Keycloak JWKS.
-#          A 30-second wait is built in automatically — do not interrupt.
+#    NOTE: make test-all requires make all to be run first.
+#          On first run, make test-all restarts istiod to sync Keycloak JWKS,
+#          then waits for every Envoy sidecar to ACK the new config before
+#          testing (auto-detected via istioctl proxy-status — no fixed sleep).
+#          This can take up to ~2 min on a slow machine; do not interrupt.
 #
 #  RETURNING / SUBSEQUENT RUNS (cluster already up)
 #  ─────────────────────────────────────
+#    make all        → Re-run setup + restart port-forwards
 #    make test-all   → Re-run all security tests (handles port-forwards automatically)
 #    make ports      → Restart port-forwards only (if browser dashboards stopped)
 #    make status     → Check pod/policy status
@@ -69,7 +74,7 @@ TEST_SUMMARY_FILE := .test-summary.log
         istio-install istio-addons \
         build-image rebuild-image \
 	prepare-summary print-summary \
-        deploy-app deploy-keycloak deploy-opa deploy-test-clients deploy-all wait-pods \
+        deploy-app deploy-keycloak deploy-opa deploy-test-clients deploy-all wait-pods wait-mesh-sync \
         patch-istio-mesh apply-authz apply-jwt apply-microseg apply-opa-network-policy jwt-refresh \
         setup-keycloak setup-keycloak-viewer open-keycloak open-kiali open-grafana \
         get-token get-token-viewer \
@@ -281,8 +286,7 @@ step3: patch-istio-mesh apply-authz
 	@echo ">>> [Step 3] North-South policies applied"
 
 step4: apply-microseg apply-jwt ensure-ports setup-keycloak
-	@echo "    Waiting 10s for Envoy sidecars to sync new policies..."
-	@sleep 10
+	@$(MAKE) --no-print-directory wait-mesh-sync
 	@echo ">>> [Step 4] East-West + JWT policies applied (Keycloak configured)"
 
 # ---------- Step 1 Details ----------
@@ -362,6 +366,28 @@ wait-pods:
 	@kubectl wait --for=condition=Ready pod -l role=test-client --timeout=180s || { echo "ERROR: test-client pod not ready"; exit 1; }
 	@echo "    All Pods ready"
 
+# Poll until every Envoy sidecar has converged on a single istiod (replaces
+# fixed `sleep` waits). After an istiod restart, proxies briefly split between
+# the old (terminating) and new control-plane pod; `istioctl proxy-status`
+# lists each proxy's connected istiod in column 3. When exactly one distinct
+# istiod remains, the mesh has re-synced. Empty output (istiod still mid-restart)
+# counts as 0 distinct → keep waiting, so we never false-positive too early.
+# NOTE: Istio 1.28 proxy-status columns are NAME/CLUSTER/ISTIOD/VERSION/...
+#       (no per-xDS SYNCED/STALE columns — do not grep for STALE here).
+wait-mesh-sync:
+	@echo "    Waiting for Envoy sidecars to converge on one istiod (max 120s)..."
+	@DEADLINE=$$(( $$(date +%s) + 120 )); \
+	while [ $$(date +%s) -lt $$DEADLINE ]; do \
+		ISTIODS=$$($(ISTIOCTL) proxy-status 2>/dev/null | tail -n +2 | awk 'NF{print $$3}' | sort -u); \
+		COUNT=$$(printf '%s\n' "$$ISTIODS" | grep -c .); \
+		if [ "$$COUNT" -eq 1 ]; then \
+			echo "    All Envoy proxies synced with $$ISTIODS"; \
+			exit 0; \
+		fi; \
+		sleep 3; \
+	done; \
+	echo "    WARNING: Timed out waiting for proxy sync (120s). Proceeding."
+
 # ---------- Step 3 Details ----------
 patch-istio-mesh:
 	@echo ">>> Registering OPA ext-authz..."
@@ -423,8 +449,7 @@ jwt-refresh:
 		kubectl rollout restart deployment/istiod -n istio-system; \
 		kubectl rollout status deployment/istiod -n istio-system --timeout=240s; \
 		echo "$$CURRENT" > .jwks-fingerprint; \
-		echo "    Waiting 30s for all Envoy sidecars to re-sync with new istiod..."; \
-		sleep 30; \
+		$(MAKE) --no-print-directory wait-mesh-sync; \
 	fi
 
 # ============================================================
