@@ -14,6 +14,21 @@ Practical implementation of Zero Trust Architecture (ZTA) on Kubernetes, aligned
 > **All commands must run inside a WSL Ubuntu terminal — not PowerShell.**
 > Docker Desktop must be running on Windows before you begin.
 
+**The whole workflow is three commands, in this exact order:**
+
+```bash
+make all        # 1. Build cluster + deploy everything + open dashboards  (run once, ~3-5 min)
+make test-all   # 2. Run all 18 security tests                            (requires step 1 first)
+make clean      # 3. Tear down app + policies when finished
+```
+
+> ⚠️ **`make test-all` will mostly fail if you skip `make all`.** The tests need the
+> cluster, app pods, Keycloak, and port-forwards that `make all` creates. Running
+> `test-all` on its own typically passes only the 2 tests that don't require a live
+> JWT/identity path. Always do `make all` first.
+
+The sections below walk through each step in detail.
+
 ### Step 0: Prerequisites
 
 On Windows host:
@@ -38,18 +53,21 @@ cd ZTA_architecture
 ### Step 2: Full Environment Setup
 
 ```bash
-make setup
+make all
 ```
 
-This single command:
+This single command runs `make setup` + `make ports`:
 1. Starts minikube (Docker Desktop driver)
 2. Installs Istio + addons (Kiali, Prometheus, Grafana)
 3. Builds and deploys the app image
 4. Deploys Keycloak (identity provider) and OPA (policy engine)
 5. Applies all mTLS, JWT, and authorization policies
 6. Configures the Keycloak realm and users
+7. Opens port-forwards (Keycloak :18080, Kiali :20000, Grafana :20002)
 
 Takes approximately 3–5 minutes on first run. Subsequent runs skip already-completed steps.
+
+> **`make test-all` requires `make all` to be run first.** The cluster, pods, and port-forwards must be up before tests can execute.
 
 ### Step 3: Run All Security Tests
 
@@ -57,9 +75,9 @@ Takes approximately 3–5 minutes on first run. Subsequent runs skip already-com
 make test-all
 ```
 
-This command is self-contained — it starts port-forwards, syncs Keycloak JWT keys, and then runs all 18 test cases across Scenarios A–E.
+Runs all 18 test cases across Scenarios A–E.
 
-> **First-run note:** On a fresh clone, `make test-all` detects that the JWT key fingerprint is new and restarts `istiod` to sync. A **30-second wait** is built in automatically after the restart so that all Envoy sidecars finish re-syncing before tests begin. Do not interrupt this wait.
+> **First-run note:** On a fresh clone, `make test-all` detects that the JWT key fingerprint is new and restarts `istiod` to sync. It then **automatically waits until every Envoy sidecar has acknowledged the new config** (detected via `istioctl proxy-status` — no fixed sleep, so fast machines proceed quickly and slow machines wait as long as needed, up to ~2 min). Do not interrupt this wait.
 
 Expected output ends with:
 
@@ -70,13 +88,13 @@ FINAL: PASS (0 group/step failed)
 ### Step 4: Open Dashboards (Optional)
 
 ```bash
-make ports          # Start port-forwards (already done by test-all, but use this to restart)
+make ports          # Start port-forwards (already done by make all, but use this to restart)
 make open-kiali     # http://localhost:20000  — service mesh topology
 make open-grafana   # http://localhost:20002  — metrics & latency
 make open-keycloak  # http://localhost:18080  — identity provider (admin / admin)
 ```
 
-### Phased Setup (if `make setup` fails partway)
+### Phased Setup (if `make all` fails partway)
 
 ```bash
 make step1   # minikube + Istio + addons + Docker image
@@ -317,7 +335,7 @@ See [Quick Start (First-Time Setup)](#quick-start-first-time-setup) at the top o
 ```bash
 git clone https://github.com/MinsooAhn-SBU/ZTA_architecture.git
 cd ZTA_architecture
-make setup      # ~3-5 min, run once
+make all        # ~3-5 min, run once (setup + port-forwards)
 make test-all   # run all 18 security tests
 ```
 
@@ -454,9 +472,10 @@ make open-keycloak # Opens http://localhost:18080
 ## Key Make Targets
 
 - make help: show all commands
-- make setup: full environment setup
+- **make all: ENTRY POINT — full environment setup (setup + port-forwards)**
+- make setup: setup only (minikube + Istio + app + policies), without port-forwards
 - make step1 / make step2 / make step3 / make step4: phased setup
-- make test-all: full security verification
+- **make test-all: full security verification — requires `make all` first**
 - make status: cluster/service status
 - make clean: remove app/policy resources
 - make clean-all: full cleanup including Istio and minikube
