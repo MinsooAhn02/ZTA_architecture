@@ -12,3 +12,4 @@ CLAUDE.md
 .token-cache/
 .last-error.log
 .jwks-fingerprint
+test-diagnostics.txt
