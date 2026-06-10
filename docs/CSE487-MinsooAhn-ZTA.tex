@@ -177,9 +177,12 @@ without that path granting access.
 \end{sloppypar}
 
 \begin{table}[!t]
-\caption{OPA Rego allow rules (simplified). $^{\dagger}$The header-based Scenario C
-rules are gated by \texttt{demo\_mode}; with \texttt{demo\_mode = false} only the
-signed-JWT rules (D, E) remain active.}
+\caption{OPA Rego allow rules (simplified). $^{\dagger}$The header-based rules are
+gated by \texttt{demo\_mode}; with \texttt{demo\_mode = false} only the
+signed-JWT rules (D, E) remain active. $^{\ddagger}$The E-W rule resides in the
+Rego policy but the ext-authz provider selector targets only the frontend service;
+this rule never fires on pod-to-pod traffic, which is enforced exclusively by
+mTLS PeerAuthentication and the SPIFFE allowlist.}
 \label{tab:rego}
 \centering
 \scriptsize
@@ -187,7 +190,8 @@ signed-JWT rules (D, E) remain active.}
 \toprule
 Scenario & Conditions (conjunction) & Decision \\
 \midrule
-A (E-W) & \texttt{source.principal} = \texttt{frontend-sa} $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
+A (E-W)$^{\ddagger}$ & \texttt{source.principal} = \texttt{frontend-sa} $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
+A-NS-2/C-4$^{\dagger}$ & \texttt{demo\_mode} $\wedge$ role header = ``admin'' $\wedge$ posture\_ok & allow \\
 C$^{\dagger}$ & \texttt{demo\_mode} $\wedge$ role header = ``user'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
 D (admin) & \texttt{jwt.realm\_access.roles} $\ni$ ``admin'' $\wedge$ posture\_ok & allow \\
 D (viewer) & \texttt{jwt.realm\_access.roles} $\ni$ ``viewer'' $\wedge$ method = GET $\wedge$ path $\not\supseteq$ \texttt{/api/admin} & allow \\
@@ -207,9 +211,12 @@ carried an injected sidecar, that sidecar's inbound filter chain would intercept
 \texttt{CheckRequest} and---following the same ext-authz filter configuration---would issue a
 new \texttt{CheckRequest} to OPA to authorize the original authorization request. This forms
 an infinite loop: Envoy $\to$ OPA $\to$ (OPA's own Envoy intercepts) $\to$ OPA $\to \cdots$.
-OPA must therefore reside outside the sidecar mesh. The plaintext channel is bounded to
-intra-cluster traffic by a Kubernetes NetworkPolicy (\texttt{opa-network-policy.yaml}) that
-restricts port 9191 to mesh-internal peers only.
+OPA must therefore reside outside the sidecar mesh. A Kubernetes NetworkPolicy manifest
+(\texttt{opa-network-policy.yaml}) is provided to restrict port 9191 to intra-cluster
+traffic; enforcing it in production requires a NetworkPolicy-capable CNI such as Calico.
+Minikube's default CNI (kindnet) does not enforce NetworkPolicies, so in this sandbox
+the plaintext channel is bounded only by cluster-level isolation rather than
+per-port access control.
 
 \vspace{4pt}
 \section{Results}
@@ -269,7 +276,7 @@ Scenario & Case & Request signals & Expect & Result \\
 \multirow{3}{*}{B}
   & B-1 & Forged JWT (invalid signature) to \texttt{/api/admin} & 403 & 403 \\
   & B-2 & Tampered real JWT payload to \texttt{/api/admin} & 401 & 401 \\
-  & B-3 & Valid Keycloak JWT to \texttt{/api/admin} & 200 & 200 \\
+  & B-4 & Valid Keycloak JWT to \texttt{/api/admin} & 200 & 200 \\
 \midrule
 \multirow{4}{*}{C}
   & C-1 & \texttt{role:user}, GET \texttt{/api/data} & 200 & 200 \\
@@ -420,9 +427,11 @@ service policy enforcement.
 \vspace{4pt}
 \section{Limitations}
 Device posture is simulated through a client-provided header rather than a verified
-endpoint-compliance signal. The OPA ext-authz channel operates over plaintext gRPC;
-the architectural reason and the mitigating NetworkPolicy are described in
-Section~\ref{sec:topo}. Sequential-connection load tests do not capture behavior under
+endpoint-compliance signal. The OPA ext-authz channel operates over plaintext gRPC; the architectural reason
+is described in Section~\ref{sec:topo}. The provided NetworkPolicy manifest is not
+enforced in this sandbox because Minikube's default CNI does not support NetworkPolicy;
+a production deployment requires a compatible CNI (e.g., Calico) for the port-9191
+restriction to take effect. Sequential-connection load tests do not capture behavior under
 concurrent request pressure. The environment runs on Minikube inside WSL2, where CPU
 and memory are shared with the host OS, so absolute throughput figures do not represent
 production-scale capacity.

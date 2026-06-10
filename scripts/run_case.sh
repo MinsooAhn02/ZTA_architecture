@@ -36,12 +36,17 @@ shift 6 || true
 
 TIMEOUT="${TIMEOUT:-10}"
 SUMMARY="${SUMMARY:-.test-summary.log}"
+DIAG_FILE="${DIAG_FILE:-test-diagnostics.txt}"
 BODY="${BODY:-}"
 
 touch "$SUMMARY"
 
+# Capture response body to temp file so we can record it on failure.
+TMPBODY=$(mktemp)
+trap 'rm -f "$TMPBODY"' EXIT
+
 # Build curl argv as an array — no eval, no shell-injection risk.
-CURL_ARGV=(curl -s -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" -X "$METHOD")
+CURL_ARGV=(curl -s -o "$TMPBODY" -w '%{http_code}' --max-time "$TIMEOUT" -X "$METHOD")
 for h in "$@"; do
     CURL_ARGV+=(-H "$h")
 done
@@ -64,6 +69,17 @@ if printf '%s' "$RESULT" | grep -Eq "^(${EXPECT_RE})$"; then
     STATUS="PASS"
 else
     STATUS="FAIL"
+    # Append per-failure detail to diagnostics file.
+    {
+        echo "=============================="
+        echo "FAIL: $CASE"
+        echo "  URL:    $METHOD $URL"
+        echo "  EXPECT: $EXPECT_RE  RESULT: $RESULT"
+        echo "  DETAIL: $DETAIL"
+        echo "  --- Response Body ---"
+        cat "$TMPBODY" 2>/dev/null || echo "(empty)"
+        echo ""
+    } >> "$DIAG_FILE"
 fi
 
 echo "EXPECT: ${EXPECT_RE}"

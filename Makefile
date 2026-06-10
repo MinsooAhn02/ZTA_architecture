@@ -66,6 +66,7 @@ NAMESPACE      := default
 KEYCLOAK_REALM := myrealm
 KEYCLOAK_URL   := http://localhost:18080
 TEST_SUMMARY_FILE := .test-summary.log
+DIAG_FILE         := test-diagnostics.txt
 
 .PHONY: for_pdf \
         all help status test-all clean \
@@ -121,20 +122,25 @@ test-all: ensure-ports setup-keycloak prepare-summary jwt-refresh setup-keycloak
 	@echo "- Each test prints REQUEST / EXPECT / RESULT / STATUS"
 	@echo "- Final section prints consolidated summary table"
 	@echo "=============================================================="
-	@FAIL=0; \
+	@rm -f $(DIAG_FILE); \
+	printf "=== ZTA Test Run: %s ===\n\n" "$$(date)" > $(DIAG_FILE); \
+	FAIL=0; \
+	export DIAG_FILE=$(DIAG_FILE); \
 	for t in test test-lateral test-fake test-jwt-tampered test-jwt-auto test-context test-jwt-role test-posture; do \
 		echo ""; \
 		echo ">>> Running $$t"; \
-		if ! $(MAKE) --no-print-directory $$t; then \
+		if ! $(MAKE) --no-print-directory DIAG_FILE=$(DIAG_FILE) $$t; then \
 			FAIL=$$((FAIL+1)); \
 		fi; \
 	done; \
 	$(MAKE) --no-print-directory print-summary; \
 	echo ""; \
 	if [ $$FAIL -gt 0 ]; then \
-		echo "FINAL: FAIL ($$FAIL group/step failed)"; \
+		$(MAKE) --no-print-directory DIAG_FILE=$(DIAG_FILE) collect-diagnostics; \
+		echo "FINAL: FAIL ($$FAIL group/step failed) — see $(DIAG_FILE)"; \
 		exit 1; \
 	else \
+		rm -f $(DIAG_FILE); \
 		echo "FINAL: PASS (all groups matched expected result)"; \
 	fi
 
@@ -174,6 +180,39 @@ print-summary:
 		echo "  detail: $$DETAIL"; \
 	done < $(TEST_SUMMARY_FILE)
 	@echo "--------------------------------------------------------------------------"
+
+collect-diagnostics:
+	@echo ">>> Collecting diagnostics -> $(DIAG_FILE)"
+	@{ \
+		echo ""; \
+		echo "=== Test Summary ==="; \
+		cat $(TEST_SUMMARY_FILE) 2>/dev/null || echo "(no summary)"; \
+		echo ""; \
+		echo "=== Pod Status ==="; \
+		kubectl get pods -o wide 2>/dev/null; \
+		echo ""; \
+		echo "=== OPA Logs (last 100) ==="; \
+		kubectl logs -l app=opa --tail=100 2>/dev/null; \
+		echo ""; \
+		echo "=== Frontend Logs (last 50) ==="; \
+		kubectl logs -l app=frontend -c frontend --tail=50 2>/dev/null; \
+		echo ""; \
+		echo "=== Backend Logs (last 50) ==="; \
+		kubectl logs -l app=backend -c backend --tail=50 2>/dev/null; \
+		echo ""; \
+		echo "=== Istio Proxy Status ==="; \
+		$(ISTIOCTL) proxy-status 2>/dev/null; \
+		echo ""; \
+		echo "=== Security Policy Details ==="; \
+		kubectl get authorizationpolicy,peerauthentication,requestauthentication -o yaml 2>/dev/null; \
+		echo ""; \
+		echo "=== Keycloak Logs (last 50) ==="; \
+		kubectl logs -l app=keycloak -c keycloak --tail=50 2>/dev/null; \
+		echo ""; \
+		echo "=== Pod Describe ==="; \
+		kubectl describe pods 2>/dev/null; \
+	} >> $(DIAG_FILE)
+	@echo "    Saved: $(DIAG_FILE)"
 
 # ============================================================
 #  Help
