@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 set -e
 
-cd /mnt/c/Users/dksal/zta-project
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$SCRIPT_DIR/.."
 
 make port-keycloak >/dev/null
 make setup-keycloak-viewer >/dev/null
