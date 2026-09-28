@@ -1088,7 +1088,7 @@ restart:
 # ============================================================
 visualizer view viz:
 	@if command -v wsl >/dev/null 2>&1; then \
-	  wsl bash -c 'cd /mnt/c/Users/dksal/zta-project && make --no-print-directory _viz-inner'; \
+	  wsl bash -c 'cd /mnt/c/Users/dksal/minsoo_security/projects/zta-project && make --no-print-directory _viz-inner'; \
 	else \
 	  $(MAKE) --no-print-directory _viz-inner; \
 	fi
