@@ -521,3 +521,15 @@ Re-run the install steps in this README and verify with version commands.
 | 5     | Asset integrity monitored continuously           | Kiali topology, Grafana metrics, OPA decision logs           |
 | 6     | All authentication and authorization dynamic     | No pre-approved sessions; every request re-evaluated         |
 | 7     | Collect as much information as possible          | Prometheus/Grafana metrics, OPA `decision_logs.console=true` |
+
+## Improving My ZTA Project with AI
+
+I used AI to improve the ZTA research project I had worked on with my professor. I looked for parts to improve and added more test scenarios. I did not want to stop after putting the project in my portfolio. I spent time on it because I wanted to develop what I had already done and see what else I could learn from it.
+
+At first, I thought ZTA meant not simply trusting a request and only allowing access after checking certain conditions. But when I started improving the project, I had more scenarios, and it felt like there were more and more things to block. I also wondered if I could really think of and prepare for every attack, because attackers could approach the system in more ways than I could think of. Later, I realized that more scenarios did not just mean more problems to block. Rather than trying to predict each attack, the same checks for identity and permissions could limit different kinds of access attempts.
+
+In the end, the overall structure was not very different from what I had originally done. The main idea was still to check identity and permissions and only allow the access that was needed. This time, I looked more closely at why access was allowed and whether those decisions still worked in different situations. I think this made the reasons for trust and the limits of that trust clearer, rather than simply increasing trust itself.
+
+As AI improves, I wanted to use it to take another look at work I had already done. I also wanted to see how useful ZTA could be and where its limits were. I think it was worth doing because I could look at the structure again and think about what each security feature could actually guarantee, instead of just adding more features.
+
+What I felt most was that trust is difficult. Even if we try to block attackers, we cannot fully know what they intend to do. A normal user, or someone with valid permissions, can also carry out an attack. It felt almost impossible to check everything about who someone is, what permissions they have, what they are doing, and the situation they are in. Still, I do not think the answer is to keep doubting everything and block all access. We need to allow the access that is needed, so we have to keep deciding what to trust and what to check further. I realized that security does not end just because we add more features, and that made it feel more difficult to me.
