@@ -13,3 +13,8 @@ CLAUDE.md
 .last-error.log
 .jwks-fingerprint
 test-diagnostics.txt
+
+# untracked working files
+notes/
+papers/
+.vscode/
