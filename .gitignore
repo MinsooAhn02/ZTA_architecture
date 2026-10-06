@@ -14,3 +14,9 @@ CLAUDE.md
 .jwks-fingerprint
 test-diagnostics.txt
 tasks/
+
+# untracked run/working files
+evidence/v2/*/case-progress.jsonl
+notes/
+papers/
+.vscode/
