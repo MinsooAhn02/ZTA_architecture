@@ -1,0 +1,737 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zta-v2
+  labels:
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend-sa
+  namespace: zta-v2
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+  namespace: zta-v2
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-admin
+  namespace: zta-v2
+type: Opaque
+stringData:
+  username: admin
+  password: admin
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-data
+  namespace: zta-v2
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: zta-v2
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:23.0.7
+          args: ["start-dev"]
+          env:
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: username
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: password
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: keycloak-data
+              mountPath: /opt/keycloak/data
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            httpGet:
+              path: /realms/master
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /realms/master
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /realms/master
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: keycloak-data
+          persistentVolumeClaim:
+            claimName: keycloak-data
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: zta-v2
+  labels:
+    app: keycloak
+spec:
+  type: ClusterIP
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opa
+  namespace: zta-v2
+  labels:
+    app: opa
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opa
+  template:
+    metadata:
+      labels:
+        app: opa
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: opa
+          image: openpolicyagent/opa:0.70.0-envoy
+          env:
+            - name: TMPDIR
+              value: /tmp
+          args:
+            - run
+            - --server
+            - --watch
+            - --addr=127.0.0.1:8181
+            - --set=plugins.envoy_ext_authz_grpc.addr=:9191
+            - --set=plugins.envoy_ext_authz_grpc.path=istio/authz/allow
+            - --set=decision_logs.console=true
+            - /policies/policy.rego
+            - /policies/mask.rego
+            - /trust/jwt_trust.json
+          ports:
+            - name: management
+              containerPort: 8181
+            - name: ext-authz
+              containerPort: 9191
+          volumeMounts:
+            - name: policies
+              mountPath: /policies
+              readOnly: true
+            - name: trust
+              mountPath: /trust
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            tcpSocket:
+              port: ext-authz
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: ext-authz
+            periodSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: ext-authz
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: policies
+          configMap:
+            name: opa-policy
+        - name: trust
+          configMap:
+            name: jwt-trust
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opa
+  namespace: zta-v2
+  labels:
+    app: opa
+spec:
+  type: ClusterIP
+  selector:
+    app: opa
+  ports:
+    - name: grpc-ext-authz
+      appProtocol: grpc
+      port: 9191
+      targetPort: ext-authz
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: zta-v2
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      serviceAccountName: backend-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: __APP_IMAGE__
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ROLE
+              value: backend
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: zta-v2
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: zta-v2
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      serviceAccountName: frontend-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: __APP_IMAGE__
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ROLE
+              value: frontend
+            - name: BACKEND_URL
+              value: http://backend
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: zta-v2
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: zta-v2
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: RequestAuthentication
+metadata:
+  name: frontend-jwt
+  namespace: zta-v2
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  jwtRules:
+    - issuer: __ISSUER__
+      jwks: '__INLINE_JWKS__'
+      audiences: [zta-frontend]
+      forwardOriginalToken: true
+---
+apiVersion: security.istio.io/v1
+kind: RequestAuthentication
+metadata:
+  name: backend-jwt
+  namespace: zta-v2
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  jwtRules:
+    - issuer: __ISSUER__
+      jwks: '__INLINE_JWKS__'
+      audiences: [zta-backend]
+      forwardOriginalToken: true
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: require-jwt-frontend
+  namespace: zta-v2
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  action: ALLOW
+  rules:
+    - to:
+        - operation:
+            methods: [GET]
+            paths: [/healthz]
+    - from:
+        - source:
+            requestPrincipals: ["*"]
+      to:
+        - operation:
+            paths: ["/", "/api/*"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: backend-allow-frontend-only
+  namespace: zta-v2
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: ALLOW
+  rules:
+    - to:
+        - operation:
+            methods: [GET]
+            paths: [/healthz]
+    - from:
+        - source:
+            principals: [cluster.local/ns/zta-v2/sa/frontend-sa]
+            requestPrincipals: ["*"]
+      to:
+        - operation:
+            paths: ["/", "/api/*"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: ext-authz-frontend
+  namespace: zta-v2
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  action: CUSTOM
+  provider:
+    name: opa-provider
+  rules:
+    - to:
+        - operation:
+            paths: ["/", "/api/*"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: ext-authz-backend
+  namespace: zta-v2
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: CUSTOM
+  provider:
+    name: opa-provider
+  rules:
+    - to:
+        - operation:
+            paths: ["/", "/api/*"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opa-ext-authz-ingress
+  namespace: zta-v2
+spec:
+  podSelector:
+    matchLabels:
+      app: opa
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: zta-v2
+          podSelector:
+            matchLabels:
+              app: frontend
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: zta-v2
+          podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 9191
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: curl-client
+  namespace: zta-v2
+  labels:
+    app: curl-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: curl-client
+  template:
+    metadata:
+      labels:
+        app: curl-client
+        role: test-client
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: curl
+          image: curlimages/curl:8.11.1
+          command: ["/bin/sh", "-c", "sleep infinity"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rogue-client
+  namespace: zta-v2
+  labels:
+    app: rogue-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rogue-client
+  template:
+    metadata:
+      labels:
+        app: rogue-client
+        role: test-client
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: curl
+          image: curlimages/curl:8.11.1
+          command: ["/bin/sh", "-c", "sleep infinity"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wrongsa-client
+  namespace: zta-v2
+  labels:
+    app: wrongsa-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wrongsa-client
+  template:
+    metadata:
+      labels:
+        app: wrongsa-client
+        role: test-client
+    spec:
+      serviceAccountName: backend-sa
+      automountServiceAccountToken: false
+      containers:
+        - name: curl
+          image: curlimages/curl:8.11.1
+          command: ["/bin/sh", "-c", "sleep infinity"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-probe
+  namespace: zta-v2
+  labels:
+    app: frontend-probe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-probe
+  template:
+    metadata:
+      labels:
+        app: frontend-probe
+        role: test-client
+    spec:
+      serviceAccountName: frontend-sa
+      automountServiceAccountToken: false
+      containers:
+        - name: curl
+          image: curlimages/curl:8.11.1
+          command: ["/bin/sh", "-c", "sleep infinity"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fortio-client
+  namespace: zta-v2
+  labels:
+    app: fortio-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fortio-client
+  template:
+    metadata:
+      labels:
+        app: fortio-client
+        role: test-client
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: fortio
+          image: fortio/fortio:1.69.3
+          args: [server, -quiet]
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

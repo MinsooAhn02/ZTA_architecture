@@ -1,0 +1,3 @@
+Ready: all expected Envoy proxies acknowledged config
+PASS: strict admin backend-data, viewer admin deny, missing JWT/posture deny
+PASS:34 cases, official performance, strict restoration, baseline preserved

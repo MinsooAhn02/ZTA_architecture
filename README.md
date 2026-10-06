@@ -1,3 +1,7 @@
+> 이 checkout은 `zta-v2-hardening` 확장 worktree입니다. 실행 방법은 [v2 운영 문서](docs/v2/README.md), 현재 검증 상태는 [v2 결과 기록](docs/v2/RESULTS.md)을 먼저 확인하세요.
+>
+> 아래 원본 설명은 프로젝트의 과거 배경 자료입니다. 원본 실행 환경과 evidence는 별도 `zta-project` main에 보존했으며, 아래의 과거 수치는 v2 통과·성능 결과로 합산하지 않습니다.
+
 # Minsoo ZTA Sandbox
 
 Practical implementation of Zero Trust Architecture (ZTA) on Kubernetes, aligned with NIST SP 800-207.

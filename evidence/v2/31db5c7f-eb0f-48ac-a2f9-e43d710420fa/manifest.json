@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "run_id": "31db5c7f-eb0f-48ac-a2f9-e43d710420fa",
+  "action": "test",
+  "started_at": "2026-10-05T19:35:30.043307+00:00",
+  "status": "ERROR",
+  "profile": "zta-v2",
+  "namespace": "zta-v2",
+  "mode": "strict",
+  "commit": "49daa49e49dc1a7a626ff998cf2038983fd63eef",
+  "app_image": "zta-app:49daa49e49dc-653e4d59c483",
+  "jwks_sha256": "71d78e240e2cca39d7697e32579d3ce4cb5064db048bbeaa5bab3ec745effefa",
+  "cpu": 4,
+  "memory_mb": 8192,
+  "kubernetes": "1.34.0",
+  "istio": "1.28.3",
+  "live_contract": {
+    "frontend": {
+      "listener": 8080,
+      "jwt": true,
+      "opa": true,
+      "path_normalization": "DECODE_AND_MERGE_SLASHES"
+    },
+    "backend": {
+      "listener": 8080,
+      "jwt": true,
+      "opa": true,
+      "path_normalization": "DECODE_AND_MERGE_SLASHES"
+    },
+    "app_image_ids": {
+      "backend": "sha256:41112d3bc74336de06188fe51f5cae707676b3913d7b9994b9597ced14ef3034",
+      "frontend": "sha256:41112d3bc74336de06188fe51f5cae707676b3913d7b9994b9597ced14ef3034"
+    },
+    "clock_max_skew_seconds": 0.38762831687927246
+  },
+  "restored_strict": true,
+  "finished_at": "2026-10-05T19:50:14.612028+00:00",
+  "execution_error": null
+}

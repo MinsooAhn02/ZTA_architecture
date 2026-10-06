@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "run_id": "bb15b6f0-b7ae-4492-9e2c-683eb743b62e",
+  "action": "case",
+  "started_at": "2026-10-06T16:20:18.845817+00:00",
+  "status": "PASS",
+  "profile": "zta-v2",
+  "namespace": "zta-v2",
+  "mode": "strict",
+  "commit": "49daa49e49dc1a7a626ff998cf2038983fd63eef",
+  "app_image": "zta-app:49daa49e49dc-8276f9fc778f",
+  "jwks_sha256": "71d78e240e2cca39d7697e32579d3ce4cb5064db048bbeaa5bab3ec745effefa",
+  "cpu": 4,
+  "memory_mb": 8192,
+  "kubernetes": "1.34.0",
+  "istio": "1.28.3",
+  "source_sha256": "b88a790e84290ac320f3c2ee8ecbc6dba313c2febdaafc1b90cf29f6fa4882c4",
+  "live_contract": {
+    "frontend": {
+      "listener": 8080,
+      "jwt": true,
+      "opa": true,
+      "path_normalization": "DECODE_AND_MERGE_SLASHES"
+    },
+    "backend": {
+      "listener": 8080,
+      "jwt": true,
+      "opa": true,
+      "path_normalization": "DECODE_AND_MERGE_SLASHES"
+    },
+    "app_image_ids": {
+      "backend": "sha256:58b1abfad84cd2051c0730b1eec9c789fd7d018e8e9e359221a9427a40e0277f",
+      "frontend": "sha256:58b1abfad84cd2051c0730b1eec9c789fd7d018e8e9e359221a9427a40e0277f"
+    },
+    "app_versions": {
+      "python": "3.12.15",
+      "flask": "3.1.3",
+      "requests": "2.32.5"
+    },
+    "clock_max_skew_seconds": 0.5701799392700195,
+    "keycloak_clock_skew_seconds": 0.0042307376861572266
+  },
+  "app_unit": {
+    "level": "unit",
+    "kubectl_exit": 0,
+    "cases": 4,
+    "evidence": "app-python312-unit.txt",
+    "assertions": [
+      "identity forwarding and upstream status/type preservation",
+      "timeout504 and connection502",
+      "bounded JSON object simulation",
+      "safe health"
+    ]
+  },
+  "source_unchanged": true,
+  "restored_strict": true,
+  "finished_at": "2026-10-06T16:21:39.197560+00:00",
+  "execution_error": null
+}

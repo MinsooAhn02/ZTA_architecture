@@ -1,0 +1,22 @@
+{
+  "kind": "error",
+  "http_code": 503,
+  "curl_exit": 0,
+  "kubectl_exit": 0,
+  "body_ok": false,
+  "request_id": "a5bc0de8-8c8f-470e-89ec-ee40cc28d1aa-sidecar-c4-r1",
+  "layer": "sidecar",
+  "control_request_id": "e6f563a5f713b892a8df9abe34c32d0c",
+  "control_kind": "http",
+  "control_envoy": {
+    "downstream_remote": "10.244.11.144:36526",
+    "method": "POST",
+    "path": "/fortio/rest/run",
+    "request_id": "e6f563a5f713b892a8df9abe34c32d0c",
+    "response_code": 503,
+    "response_code_details": "upstream_reset_before_response_started{connection_termination}",
+    "response_flags": "UC",
+    "time": "2026-10-05T21:30:54.416Z",
+    "upstream_transport_failure": null
+  }
+}

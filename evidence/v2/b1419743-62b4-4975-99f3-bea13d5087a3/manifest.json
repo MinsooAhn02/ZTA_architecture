@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "run_id": "b1419743-62b4-4975-99f3-bea13d5087a3",
+  "action": "test",
+  "started_at": "2026-10-05T19:11:24.748440+00:00",
+  "status": "ERROR",
+  "profile": "zta-v2",
+  "namespace": "zta-v2",
+  "mode": "strict",
+  "commit": "49daa49e49dc1a7a626ff998cf2038983fd63eef",
+  "app_image": "zta-app:49daa49e49dc-653e4d59c483",
+  "jwks_sha256": "71d78e240e2cca39d7697e32579d3ce4cb5064db048bbeaa5bab3ec745effefa",
+  "cpu": 4,
+  "memory_mb": 8192,
+  "kubernetes": "1.34.0",
+  "istio": "1.28.3",
+  "restored_strict": false,
+  "finished_at": "2026-10-05T19:22:46.376788+00:00"
+}

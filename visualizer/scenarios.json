@@ -1,0 +1,784 @@
+{
+  "S01": {
+    "title": "무토큰 + role:admin",
+    "desc": "인증 부재로 거부; OPA 헤더 allow로 통과하지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S01",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S01",
+    "why": "인증 부재로 거부; OPA 헤더 allow로 통과하지 않음",
+    "group": "A"
+  },
+  "S02": {
+    "title": "viewer JWT + role:admin",
+    "desc": "admin 읽기·쓰기 거부; signed role만 반영",
+    "signals": {
+      "method": "scenario",
+      "path": "S02",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S02",
+    "why": "admin 읽기·쓰기 거부; signed role만 반영",
+    "group": "A"
+  },
+  "S03": {
+    "title": "정상 viewer 읽기 / admin 읽기·쓰기",
+    "desc": "적절한 요청만 실제 backend 성공 및 결과 본문 확인",
+    "signals": {
+      "method": "scenario",
+      "path": "S03",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S03",
+    "why": "적절한 요청만 실제 backend 성공 및 결과 본문 확인",
+    "group": "A"
+  },
+  "S04": {
+    "title": "유효 토큰의 role 하나만 변조",
+    "desc": "원본 서명 유지; 서명 변조 원인으로 거부",
+    "signals": {
+      "method": "scenario",
+      "path": "S04",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S04",
+    "why": "원본 서명 유지; 서명 변조 원인으로 거부",
+    "group": "A"
+  },
+  "S05": {
+    "title": "정상 서명 구조 + 다른 issuer",
+    "desc": "issuer가 다른 이유로 거부. test IdP/키 조건을 기록",
+    "signals": {
+      "method": "scenario",
+      "path": "S05",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S05",
+    "why": "issuer가 다른 이유로 거부. test IdP/키 조건을 기록",
+    "group": "A"
+  },
+  "S06": {
+    "title": "같은 issuer + 다른 audience",
+    "desc": "다른 client/서비스 대상 토큰 거부",
+    "signals": {
+      "method": "scenario",
+      "path": "S06",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S06",
+    "why": "다른 client/서비스 대상 토큰 거부",
+    "group": "A"
+  },
+  "S07": {
+    "title": "만료 JWT / 미래 nbf",
+    "desc": "exp/nbf 거부; 정상 token control과 clock 차이 기록",
+    "signals": {
+      "method": "scenario",
+      "path": "S07",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S07",
+    "why": "exp/nbf 거부; 정상 token control과 clock 차이 기록",
+    "group": "A"
+  },
+  "S08": {
+    "title": "unsigned·형식 오류·잘못된 Authorization",
+    "desc": "인증 실패/인가 실패를 구분하고 명확하게 거부",
+    "signals": {
+      "method": "scenario",
+      "path": "S08",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S08",
+    "why": "인증 실패/인가 실패를 구분하고 명확하게 거부",
+    "group": "A"
+  },
+  "S09": {
+    "title": "Keycloak 서명 키 교체",
+    "desc": "새 키 토큰 허용; 이전 키는 명시한 유예/폐기 계약대로 처리",
+    "signals": {
+      "method": "scenario",
+      "path": "S09",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S09",
+    "why": "새 키 토큰 허용; 이전 키는 명시한 유예/폐기 계약대로 처리",
+    "group": "A"
+  },
+  "S10": {
+    "title": "로그아웃 후 access-token 재사용",
+    "desc": "로그아웃 후 refresh 재발급 거부와 만료 전 access-token의 잔여 유효성을 별도로 확인. 즉시 회수는 제공하지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S10",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S10",
+    "why": "로그아웃 후 refresh 재발급 거부와 만료 전 access-token의 잔여 유효성을 별도로 확인. 즉시 회수는 제공하지 않음",
+    "group": "A"
+  },
+  "S11": {
+    "title": "sidecar 없는 rogue pod",
+    "desc": "정상 backend 가용성 확인 후 mTLS 차단 원인 입증",
+    "signals": {
+      "method": "scenario",
+      "path": "S11",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S11",
+    "why": "정상 backend 가용성 확인 후 mTLS 차단 원인 입증",
+    "group": "B"
+  },
+  "S12": {
+    "title": "sidecar는 있지만 허용되지 않은 SA",
+    "desc": "mTLS 성공 여부와 SPIFFE 인가 거부를 분리",
+    "signals": {
+      "method": "scenario",
+      "path": "S12",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S12",
+    "why": "mTLS 성공 여부와 SPIFFE 인가 거부를 분리",
+    "group": "B"
+  },
+  "S13": {
+    "title": "backend Service 및 pod-IP 직접 접근",
+    "desc": "두 경로 모두 동일한 경계 적용; DNS/timeout과 혼동하지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S13",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S13",
+    "why": "두 경로 모두 동일한 경계 적용; DNS/timeout과 혼동하지 않음",
+    "group": "B"
+  },
+  "S14": {
+    "title": "침해된 frontend-sa의 backend admin/write 직접 호출",
+    "desc": "유효한 frontend mTLS 신원만으로 backend admin/write를 호출해도 사용자 JWT가 없으면 거부",
+    "signals": {
+      "method": "scenario",
+      "path": "S14",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S14",
+    "why": "유효한 frontend mTLS 신원만으로 backend admin/write를 호출해도 사용자 JWT가 없으면 거부",
+    "group": "B"
+  },
+  "S15": {
+    "title": "frontend-sa가 viewer token을 backend로 전달",
+    "desc": "workload 신원은 유효해도 admin 작업은 거부",
+    "signals": {
+      "method": "scenario",
+      "path": "S15",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S15",
+    "why": "workload 신원은 유효해도 admin 작업은 거부",
+    "group": "B"
+  },
+  "S16": {
+    "title": "비인가 pod의 OPA 관리 API 접근",
+    "desc": "조회·무해한 정책/데이터 변경이 거부됨",
+    "signals": {
+      "method": "scenario",
+      "path": "S16",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S16",
+    "why": "조회·무해한 정책/데이터 변경이 거부됨",
+    "group": "B"
+  },
+  "S17": {
+    "title": "OPA 중단·timeout",
+    "desc": "허가 판단을 받을 수 없으면 요청을 처리하지 않음; transport/서비스 실패로 기록",
+    "signals": {
+      "method": "scenario",
+      "path": "S17",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S17",
+    "why": "허가 판단을 받을 수 없으면 요청을 처리하지 않음; transport/서비스 실패로 기록",
+    "group": "B"
+  },
+  "S18": {
+    "title": "policy 변경 직후 요청",
+    "desc": "허용→거부 및 복원 반영 지연을 측정. 즉시 반영으로 가정하지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S18",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S18",
+    "why": "허용→거부 및 복원 반영 지연을 측정. 즉시 반영으로 가정하지 않음",
+    "group": "B"
+  },
+  "S19": {
+    "title": "불량 posture + admin / viewer",
+    "desc": "정의한 보호 자원에서 두 역할 모두 거부",
+    "signals": {
+      "method": "scenario",
+      "path": "S19",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S19",
+    "why": "정의한 보호 자원에서 두 역할 모두 거부",
+    "group": "C"
+  },
+  "S20": {
+    "title": "posture 누락·enabled 헤더 위조",
+    "desc": "필수 상태 누락/위조로 우회할 수 없음",
+    "signals": {
+      "method": "scenario",
+      "path": "S20",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S20",
+    "why": "필수 상태 누락/위조로 우회할 수 없음",
+    "group": "C"
+  },
+  "S21": {
+    "title": "만료 또는 다른 주체의 signed posture",
+    "desc": "freshness·subject binding 위반으로 거부",
+    "signals": {
+      "method": "scenario",
+      "path": "S21",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S21",
+    "why": "freshness·subject binding 위반으로 거부",
+    "group": "C"
+  },
+  "S22": {
+    "title": "backend 403/503·응답 지연·중단",
+    "desc": "frontend가 실패를 정상 200으로 숨기지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S22",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S22",
+    "why": "frontend가 실패를 정상 200으로 숨기지 않음",
+    "group": "D"
+  },
+  "S23": {
+    "title": "frontend/OPA 재시작 후 재검증",
+    "desc": "readiness 및 정책 반영 확인 후 정상 요청만 성공",
+    "signals": {
+      "method": "scenario",
+      "path": "S23",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S23",
+    "why": "readiness 및 정책 반영 확인 후 정상 요청만 성공",
+    "group": "D"
+  },
+  "S24": {
+    "title": "Keycloak 일시 중단",
+    "desc": "이미 검증 키가 있는 유효 token과 신규 발급/키 갱신 실패를 구분; 사전 정의한 계약과 비교",
+    "signals": {
+      "method": "scenario",
+      "path": "S24",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S24",
+    "why": "이미 검증 키가 있는 유효 token과 신규 발급/키 갱신 실패를 구분; 사전 정의한 계약과 비교",
+    "group": "D"
+  },
+  "S25": {
+    "title": "경로·method 경계",
+    "desc": "`/api/admin/`, 중복 slash, percent encoding, query, HEAD/OPTIONS 등을 일관되게 해석. 존재하지 않는 경로의 404를 인가 거부 성공으로 세지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S25",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S25",
+    "why": "`/api/admin/`, 중복 slash, percent encoding, query, HEAD/OPTIONS 등을 일관되게 해석. 존재하지 않는 경로의 404를 인가 거부 성공으로 세지 않음",
+    "group": "D"
+  },
+  "S26": {
+    "title": "중복 Authorization/role/posture 헤더",
+    "desc": "인증·정책 입력의 해석 불일치로 우회하지 못함",
+    "signals": {
+      "method": "scenario",
+      "path": "S26",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S26",
+    "why": "인증·정책 입력의 해석 불일치로 우회하지 못함",
+    "group": "D"
+  },
+  "S27": {
+    "title": "다른 출처에서 dashboard 명령 실행",
+    "desc": "외부 Origin/Host의 실행 요청 거부; SSE로 실행을 시작할 수 없음",
+    "signals": {
+      "method": "scenario",
+      "path": "S27",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S27",
+    "why": "외부 Origin/Host의 실행 요청 거부; SSE로 실행을 시작할 수 없음",
+    "group": "E"
+  },
+  "S28": {
+    "title": "HTML이 들어 있는 공격 요청 로그",
+    "desc": "dashboard에서 문자가 보이며 실행되지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S28",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S28",
+    "why": "dashboard에서 문자가 보이며 실행되지 않음",
+    "group": "E"
+  },
+  "S29": {
+    "title": "두 dashboard/test 작업 동시 실행",
+    "desc": "두 번째 충돌 작업 거부; 결과·정책 상태가 섞이지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S29",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S29",
+    "why": "두 번째 충돌 작업 거부; 결과·정책 상태가 섞이지 않음",
+    "group": "E"
+  },
+  "S30": {
+    "title": "raw decision log·실패 diagnostics 수집",
+    "desc": "Bearer token 등 비밀값이 없음. 검사 출력에도 token을 노출하지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S30",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S30",
+    "why": "Bearer token 등 비밀값이 없음. 검사 출력에도 token을 노출하지 않음",
+    "group": "E"
+  },
+  "S31": {
+    "title": "성능 실행 실패·mixed status·실행 취소",
+    "desc": "유효 결과로 저장하지 않고 strict 상태 복원",
+    "signals": {
+      "method": "scenario",
+      "path": "S31",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S31",
+    "why": "유효 결과로 저장하지 않고 strict 상태 복원",
+    "group": "E"
+  },
+  "S32": {
+    "title": "단계별 보안 제어 및 동시성 비교",
+    "desc": "적용 config 확인 후 반복 측정; security test가 보장하는 범위와 비용을 함께 보고",
+    "signals": {
+      "method": "scenario",
+      "path": "S32",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S32",
+    "why": "적용 config 확인 후 반복 측정; security test가 보장하는 범위와 비용을 함께 보고",
+    "group": "E"
+  },
+  "S33": {
+    "title": "mesh sync timeout·필요 proxy 누락",
+    "desc": "setup/test/perf가 실패 종료하며 오래된 설정으로 측정하지 않음",
+    "signals": {
+      "method": "scenario",
+      "path": "S33",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S33",
+    "why": "setup/test/perf가 실패 종료하며 오래된 설정으로 측정하지 않음",
+    "group": "E"
+  },
+  "S34": {
+    "title": "앱 소스 변경 후 재배포",
+    "desc": "기존 태그가 있어도 변경된 이미지가 배포됨; revision/digest와 동작 확인",
+    "signals": {
+      "method": "scenario",
+      "path": "S34",
+      "identity": "verified per case"
+    },
+    "pipeline": "ns",
+    "flow": [
+      "client",
+      "istio-jwt",
+      "istio-deny",
+      "opa",
+      "app"
+    ],
+    "block_at": null,
+    "block_reason": "Expected topology; see observed evidence",
+    "defense_layer": "Observed in evidence",
+    "make": "S34",
+    "why": "기존 태그가 있어도 변경된 이미지가 배포됨; revision/digest와 동작 확인",
+    "group": "E"
+  }
+}

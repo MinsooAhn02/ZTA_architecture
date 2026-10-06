@@ -13,3 +13,4 @@ CLAUDE.md
 .last-error.log
 .jwks-fingerprint
 test-diagnostics.txt
+tasks/

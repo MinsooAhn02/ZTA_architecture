@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "run_id": "ca946f36-9c7e-4868-b83b-94b54b57986a",
+  "action": "verify",
+  "status": "PASS",
+  "verified_at": "2026-10-06T16:11:04.607633+00:00",
+  "source_sha256": "b88a790e84290ac320f3c2ee8ecbc6dba313c2febdaafc1b90cf29f6fa4882c4",
+  "evidence_runs": {
+    "test": "9ced27f9-3fee-4f33-8d23-6dcc78612eca",
+    "perf": "5ee24e5b-7436-443b-b1a2-be44f6a68cd1"
+  },
+  "cli_exit": 0,
+  "original_profile": {
+    "Name": "minikube",
+    "Host": "Stopped",
+    "Kubelet": "Stopped",
+    "APIServer": "Stopped",
+    "Kubeconfig": "Stopped",
+    "Worker": false
+  }
+}

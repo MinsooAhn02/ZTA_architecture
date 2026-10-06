@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "run_id": "ad4665ac-21ad-44f9-9a74-d780f40f87fa",
+  "action": "ui-smoke",
+  "level": "integration",
+  "status": "PASS",
+  "checked_at": "2026-10-06T17:28:17.166602+00:00",
+  "current_source_sha256": "0879c063d275a6435ac18459cfef3b8bbfc90bcb3b86a6bd7fd807c1a99e7a3c",
+  "scope": "UI/API representative smoke; no full34-case/performance rerun",
+  "cases": [
+    {
+      "case_id": "S03",
+      "run_id": "e1f7a25d-cace-4774-b36d-bdde0bb6b6ab",
+      "status": "PASS",
+      "restored_strict": true,
+      "source_sha256": "5df0772f61d466b63864df4601dbbe23248ae01db887d51f96b38a6a4934826e"
+    },
+    {
+      "case_id": "S01",
+      "run_id": "ece59a0f-a1c6-407a-9d1f-41f82677c6cf",
+      "status": "PASS",
+      "restored_strict": true,
+      "source_sha256": "5df0772f61d466b63864df4601dbbe23248ae01db887d51f96b38a6a4934826e"
+    }
+  ],
+  "kiali_url": "http://localhost:20010/kiali/console/graph/namespaces?namespaces=zta-v2&duration=3600&refresh=10000&graphType=versionedApp&kiosk=true&animation=true",
+  "kiali_http_status": 200,
+  "kiali_frame_options": null,
+  "kiali_csp": null,
+  "ui_selection_only_event_count_before": 2,
+  "ui_selection_only_event_count_after": 2,
+  "dashboard_regression_tests": 3,
+  "dashboard_regression_exit": 0,
+  "live_mode": "strict",
+  "authorized_original_changes": [
+    "README.md"
+  ],
+  "original_readme_sha256": "ca8cddc19810909c2b7afa2b169bbe867cef2bc13153d6b983d56f52cdacb7c3"
+}

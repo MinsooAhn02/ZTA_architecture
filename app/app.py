@@ -1,78 +1,97 @@
 import os
-import json
-import logging
+import re
+import uuid
+
 import requests
-from flask import Flask, request
+from flask import Flask, Response, abort, g, jsonify, request
 
 app = Flask(__name__)
-log = logging.getLogger(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
 
-ROLE = os.getenv('ROLE', 'backend')
-BACKEND_URL = os.getenv('BACKEND_URL', 'http://backend')
-
-# OPA ext-authz intercepts BEFORE reaching these handlers.
-# Frontend proxies to Backend; Backend serves resource data.
+ROLE = os.getenv("ROLE", "backend")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend")
+TIMEOUT = (2, 5)
+_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 
 BACKEND_RESPONSES = {
-    '/': "Hello from Backend! (I am the secret data)",
-    '/api/data': '{"resource":"sensor-data","content":"temp=22C, humidity=45%","classification":"internal"}',
-    '/api/admin': '{"resource":"admin-config","classification":"CONFIDENTIAL","content":"system_key=zta-demo-key, policy_version=3"}',
-}
-
-FRONTEND_VIEWS = {
-    '/':           ("<h1>Frontend</h1><p>Backend replied: {body}</p>", "GET"),
-    '/api/data':   ("<h2>[GET /api/data]</h2><p>ZTA Decision: Allowed (user/admin, GET)</p><p>Data: {body}</p>", "GET"),
-    '/api/admin':  ("<h2>[GET /api/admin]</h2><p>ZTA Decision: Allowed (admin verified)</p><p>Data: {body}</p>", "GET"),
+    "/": {"service": "backend", "status": "ready"},
+    "/api/data": {"resource": "sensor-data", "content": "temp=22C, humidity=45%", "classification": "internal"},
+    "/api/admin": {"resource": "admin-config", "classification": "CONFIDENTIAL", "content": "demo-only", "simulation": True},
 }
 
 
-def _proxy(path, method, json_body=None):
-    """Frontend proxies to backend; return safe error message on failure (full detail in server log)."""
-    url = f"{BACKEND_URL}{path}"
+def _request_id():
+    if not hasattr(g, "request_id"):
+        value = request.headers.get("X-Request-ID", "")
+        g.request_id = value if _REQUEST_ID.fullmatch(value) else str(uuid.uuid4())
+    return g.request_id
+
+
+@app.after_request
+def add_request_id(response):
+    response.headers.setdefault("X-Request-ID", _request_id())
+    return response
+
+
+def _proxy(path, method="GET", payload=None):
+    headers = {"X-Request-ID": _request_id()}
+    for name in ("Authorization", "X-ZTA-Posture"):
+        if value := request.headers.get(name):
+            headers[name] = value
+    url = f"{BACKEND_URL.rstrip('/')}{path}"
     try:
         if method == "POST":
-            r = requests.post(url, json=json_body, timeout=5)
+            upstream = requests.post(url, json=payload, headers=headers, timeout=TIMEOUT, allow_redirects=False)
         else:
-            r = requests.get(url, timeout=5)
-        return r.text
-    except Exception as e:
-        log.warning("backend proxy %s %s failed: %s", method, path, e)
-        return "<unavailable>"
+            upstream = requests.get(url, headers=headers, timeout=TIMEOUT, allow_redirects=False)
+    except requests.Timeout:
+        return jsonify(error="backend timeout", request_id=headers["X-Request-ID"]), 504
+    except requests.RequestException:
+        return jsonify(error="backend unavailable", request_id=headers["X-Request-ID"]), 502
+
+    response = Response(upstream.content, status=upstream.status_code)
+    response.headers["Content-Type"] = upstream.headers.get("Content-Type", "application/json")
+    response.headers["X-Request-ID"] = headers["X-Request-ID"]
+    return response
 
 
-@app.route('/')
+@app.get("/healthz")
+def healthz():
+    return jsonify(status="ok")
+
+
+@app.get("/")
 def home():
-    if ROLE != 'frontend':
-        return BACKEND_RESPONSES['/']
-    body = _proxy('/', 'GET')
-    return FRONTEND_VIEWS['/'][0].format(body=body)
+    if ROLE == "frontend":
+        return _proxy("/")
+    return jsonify(BACKEND_RESPONSES["/"])
 
 
-@app.route('/api/data')
+@app.get("/api/data")
 def api_data():
-    if ROLE != 'frontend':
-        return BACKEND_RESPONSES['/api/data']
-    body = _proxy('/api/data', 'GET')
-    return FRONTEND_VIEWS['/api/data'][0].format(body=body)
+    if ROLE == "frontend":
+        return _proxy("/api/data")
+    return jsonify(BACKEND_RESPONSES["/api/data"])
 
 
-@app.route('/api/admin')
+@app.get("/api/admin")
 def api_admin():
-    if ROLE != 'frontend':
-        return BACKEND_RESPONSES['/api/admin']
-    body = _proxy('/api/admin', 'GET')
-    return FRONTEND_VIEWS['/api/admin'][0].format(body=body)
+    if ROLE == "frontend":
+        return _proxy("/api/admin")
+    return jsonify(BACKEND_RESPONSES["/api/admin"])
 
 
-@app.route('/api/write', methods=['POST'])
+@app.post("/api/write")
 def api_write():
-    payload = request.get_json(silent=True) or {}
-    if ROLE != 'frontend':
-        return json.dumps({"result": "write-accepted", "committed": True, "payload": payload})
-    body = _proxy('/api/write', 'POST', json_body=payload)
-    return f"<h2>[POST /api/write]</h2><p>ZTA Decision: Allowed (admin write)</p><p>Result: {body}</p>"
+    if request.mimetype != "application/json":
+        abort(415)
+    payload = request.get_json(silent=False)
+    if not isinstance(payload, dict):
+        return jsonify(error="JSON object required"), 400
+    if ROLE == "frontend":
+        return _proxy("/api/write", "POST", payload)
+    return jsonify(result="write-accepted", committed=False, payload=payload)
 
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    app.run(host='0.0.0.0', port=8080)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
